@@ -98,6 +98,35 @@ CORE_ORDER = ['IWDA', 'BGBL', 'VAS', 'EMXC', 'QSML']
 CORE_TICKERS = ['IWDA', 'BGBL', 'VAS', 'EMXC', 'QSML']
 US_TICKERS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'TSLA', 'PLTR'] 
 
+# --- DEEP GEOGRAPHIC MAPPING (X-RAY) ---
+GEO_MAP = {
+    # Single Country: Australia
+    'VAS': {'Australia': 1.0}, 'BHP': {'Australia': 1.0}, 'CBA': {'Australia': 1.0}, 
+    'CSL': {'Australia': 1.0}, 'WOW': {'Australia': 1.0}, 'GYG': {'Australia': 1.0}, 
+    'QOR': {'Australia': 1.0}, 'XRO': {'Australia': 1.0}, 'PMGOLD': {'Australia': 1.0},
+    
+    # Single Country: United States
+    'NVDA': {'United States': 1.0}, 'MSFT': {'United States': 1.0}, 'AAPL': {'United States': 1.0}, 
+    'AMZN': {'United States': 1.0}, 'TSLA': {'United States': 1.0}, 'PLTR': {'United States': 1.0}, 
+    'IVV': {'United States': 1.0},
+    
+    # Global Developed (IWDA, BGBL, VGS track roughly the same MSCI World Index)
+    'IWDA': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
+    'BGBL': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
+    'VGS': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
+    'VVLU': {'United States': 0.65, 'Japan': 0.10, 'United Kingdom': 0.05, 'Rest of World': 0.20},
+    'QSML': {'United States': 0.60, 'Japan': 0.10, 'United Kingdom': 0.05, 'Rest of World': 0.25},
+    
+    # Emerging Markets (ex-China roughly)
+    'EMXC': {'India': 0.25, 'Taiwan': 0.25, 'South Korea': 0.15, 'Brazil': 0.05, 'Rest of World': 0.30},
+    
+    # Thematics (Rough approximations, heavily US-skewed)
+    'ATOM': {'United States': 0.70, 'Rest of World': 0.30}, 
+    'SEMI': {'United States': 0.70, 'Taiwan': 0.15, 'Rest of World': 0.15}, 
+    'WIRE': {'United States': 0.50, 'Europe': 0.30, 'Rest of World': 0.20}
+}
+# ---------------------------------------
+
 FX_SENSITIVITY = {
     'IWDA': 'Very High', 'IVV': 'Very High', 'SEMI': 'Very High', 
     'ATOM': 'Very High', 'WIRE': 'Very High', 'BHP': 'Very High', 'CSL': 'Very High',
@@ -375,7 +404,7 @@ if not df.empty:
     )
     df['Gain_Loss_Native'] = (df['Current_Price'] - df['Avg_Price']) * df['Shares']
     total_value_aud = df['Market_Value_AUD'].sum() # This is the GRAND TOTAL
-
+    
     st.sidebar.title("🎯 Targets")
     targets = {}
     PRESETS = {'IWDA': 35, 'BGBL': 20, 'VAS': 25, 'EMXC': 10, 'QSML': 10}
@@ -480,13 +509,41 @@ if not df.empty:
             st.rerun()
 
     st.divider()
+    c_pie1, c_pie2 = st.columns(2)
     
-    st.write("### Core Distribution")
-    if not df_core.empty:
-        fig = px.pie(df_core, values='Market_Value_AUD', names='Ticker', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-        fig.update_layout(margin=dict(t=0, b=0, l=0, r=0)); fig.update_traces(textinfo='label+percent')
-        # We shrink the container slightly so a single pie chart doesn't look too massive on a desktop screen
-        st.plotly_chart(fig, use_container_width=False)
+    with c_pie1:
+        st.write("### Core Distribution")
+        if not df_core.empty:
+            fig = px.pie(df_core, values='Market_Value_AUD', names='Ticker', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0)); fig.update_traces(textinfo='label+percent')
+            st.plotly_chart(fig, use_container_width=True)
+            
+    with c_pie2:
+        st.write("### True Geographic Exposure")
+        
+        # ---> NEW MATH ENGINE: Slice up the ETFs <---
+        geo_breakdown = []
+        for index, row in df.iterrows():
+            ticker = row['Ticker']
+            total_value = row['Market_Value_AUD']
+            
+            # Get the weight dictionary, default to 100% 'Other' if not found
+            weights = GEO_MAP.get(ticker, {'Other': 1.0})
+            
+            # Chop up the dollars and add them to the pile
+            for country, percentage in weights.items():
+                geo_breakdown.append({'Country': country, 'Value': total_value * percentage})
+                
+        geo_df = pd.DataFrame(geo_breakdown)
+        geo_summary = geo_df.groupby('Country', as_index=False)['Value'].sum()
+        # --------------------------------------------
+        
+        if not geo_summary.empty:
+            # Sort it so the biggest countries group together cleanly on the chart
+            geo_summary = geo_summary.sort_values(by='Value', ascending=False)
+            fig_geo = px.pie(geo_summary, values='Value', names='Country', hole=0.4, color_discrete_sequence=px.colors.qualitative.Set2)
+            fig_geo.update_layout(margin=dict(t=0, b=0, l=0, r=0)); fig_geo.update_traces(textinfo='label+percent')
+            st.plotly_chart(fig_geo, use_container_width=True)
 
     with st.sidebar:
         st.header("💰 Net Worth")
@@ -644,6 +701,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
