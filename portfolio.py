@@ -536,9 +536,15 @@ if not df.empty:
 st.subheader("🛒 Shopping List")
 
 try:
-    # 1. Load and thoroughly clean the data
-    sheet_url = "https://docs.google.com/spreadsheets/d/1dBmx0FsTUKh0tOOFfLYnhq5iwlZYyZIJYZaxZj62orQ/export?format=csv" 
+    # 1. Load data directly from the live Google Sheet
+    sheet_url = "https://docs.google.com/spreadsheets/d/YOUR_UNIQUE_ID_HERE/export?format=csv"
     wish_list = pd.read_csv(sheet_url)
+
+    # ---> NEW FIX: Delete any blank rows from Google Sheets <---
+    wish_list = wish_list.dropna(subset=['Ticker'])
+    # -----------------------------------------------------------
+
+    wish_list.columns = wish_list.columns.str.strip()
     
     # Clean the Desired Price column of any $ or commas so math works perfectly
     wish_list['Desired Price'] = wish_list['Desired Price'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
@@ -647,4 +653,5 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
