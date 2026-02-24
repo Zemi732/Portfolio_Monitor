@@ -615,10 +615,7 @@ try:
     div_yields = []
     
     # 3. Fetch all live data and fundamental metrics
-    for ticker in wish_list['Ticker']:
-        try:
-            stock = yf.Ticker(ticker)
-    
+       
     for ticker in wish_list['Ticker']:
         try:
             stock = yf.Ticker(ticker)
@@ -717,6 +714,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
