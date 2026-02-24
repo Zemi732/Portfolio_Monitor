@@ -579,7 +579,7 @@ if not df.empty:
         st.metric("💰 Total Realized P/L", f"${total_lifetime_realized:,.2f}", help="Lifetime realized profit/loss from all sold positions.")
         st.caption("Includes fully sold positions.")
 
-        # ---> NEW SECTION: Shopping List <---
+# ---> NEW SECTION: Shopping List <---
 
 st.subheader("🛒 Shopping List")
 
@@ -588,7 +588,7 @@ try:
     sheet_url = "https://docs.google.com/spreadsheets/d/1dBmx0FsTUKh0tOOFfLYnhq5iwlZYyZIJYZaxZj62orQ/export?format=csv"
     wish_list = pd.read_csv(sheet_url)
 
-   # ---> NEW FIX: The Super Vacuum <---
+    # ---> NEW FIX: The Super Vacuum <---
     # 1. Drop truly blank rows
     wish_list = wish_list.dropna(subset=['Ticker'])
     
@@ -605,17 +605,6 @@ try:
     # Clean the Desired Price column of any $ or commas so math works perfectly
     wish_list['Desired Price'] = wish_list['Desired Price'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
     wish_list['Desired Price'] = pd.to_numeric(wish_list['Desired Price'], errors='coerce')
-    
-    # 2. Setup lists to hold our new Yahoo Finance data
-    except Exception as e:
-            # If Yahoo Finance fails to find the stock, append blanks so the lengths always match
-            actual_prices.append(None)
-            ws_targets.append(None)
-            year_lows.append(None)
-            year_highs.append(None)
-            pe_trailing.append(None)
-            pe_forward.append(None)
-            div_yields.append(None)
 
     # 3. Fetch all live data and fundamental metrics
     for ticker in wish_list['Ticker']:
@@ -642,10 +631,15 @@ try:
             raw_yield = info.get('dividendYield')
             div_yields.append(raw_yield * 100 if raw_yield else None)
 
-        except Exception:
+        except Exception as e:
             # Safety net if a ticker completely fails
-            actual_prices.append(None); ws_targets.append(None); year_lows.append(None)
-            year_highs.append(None); pe_trailing.append(None); pe_forward.append(None); div_yields.append(None)
+            actual_prices.append(None)
+            ws_targets.append(None)
+            year_lows.append(None)
+            year_highs.append(None)
+            pe_trailing.append(None)
+            pe_forward.append(None)
+            div_yields.append(None)
             
     # 4. Map the new data into our dataframe
     wish_list['Actual Price'] = actual_prices
