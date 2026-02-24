@@ -588,9 +588,17 @@ try:
     sheet_url = "https://docs.google.com/spreadsheets/d/1dBmx0FsTUKh0tOOFfLYnhq5iwlZYyZIJYZaxZj62orQ/export?format=csv"
     wish_list = pd.read_csv(sheet_url)
 
-    # ---> NEW FIX: Delete any blank rows from Google Sheets <---
+   # ---> NEW FIX: The Super Vacuum <---
+    # 1. Drop truly blank rows
     wish_list = wish_list.dropna(subset=['Ticker'])
-    # -----------------------------------------------------------
+    
+    # 2. Strip away any accidental invisible spaces
+    wish_list['Ticker'] = wish_list['Ticker'].astype(str).str.strip()
+    
+    # 3. Delete any rows that are now totally empty or just say 'nan'
+    wish_list = wish_list[wish_list['Ticker'] != '']
+    wish_list = wish_list[wish_list['Ticker'] != 'nan']
+    # -----------------------------------
 
     wish_list.columns = wish_list.columns.str.strip()
     
@@ -701,6 +709,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
