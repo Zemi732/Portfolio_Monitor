@@ -126,7 +126,11 @@ def load_data():
     total_realized_pl_lifetime = Decimal('0')
     
     try:
-        df_trades = pd.read_csv('holdings.csv')
+        try:
+        # ---> LIVE HOLDINGS CONNECTION <---
+        sheet_url = "https://docs.google.com/spreadsheets/d/1yzFLgUMXo0iutBoEEEEstJl5EcXHHpKu6EG082fEWGI/export?format=csv"
+        df_trades = pd.read_csv(sheet_url)
+        # ----------------------------------
         df_trades.columns = df_trades.columns.str.strip()
         df_trades['Trade Date'] = pd.to_datetime(df_trades['Trade Date'], dayfirst=True, format='mixed')
         df_trades = df_trades.sort_values('Trade Date', ascending=True)
