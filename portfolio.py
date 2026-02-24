@@ -537,7 +537,7 @@ st.subheader("🛒 Shopping List")
 
 try:
     # 1. Load data directly from the live Google Sheet
-    sheet_url = "https://docs.google.com/spreadsheets/d/YOUR_UNIQUE_ID_HERE/export?format=csv"
+    sheet_url = "https://docs.google.com/spreadsheets/d/1dBmx0FsTUKh0tOOFfLYnhq5iwlZYyZIJYZaxZj62orQ/export?format=csv"
     wish_list = pd.read_csv(sheet_url)
 
     # ---> NEW FIX: Delete any blank rows from Google Sheets <---
@@ -653,5 +653,6 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
