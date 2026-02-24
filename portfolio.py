@@ -605,8 +605,20 @@ try:
     # Clean the Desired Price column of any $ or commas so math works perfectly
     wish_list['Desired Price'] = wish_list['Desired Price'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
     wish_list['Desired Price'] = pd.to_numeric(wish_list['Desired Price'], errors='coerce')
-
+        
+    actual_prices = []
+    ws_targets = []
+    year_lows = []
+    year_highs = []
+    pe_trailing = []
+    pe_forward = []
+    div_yields = []
+    
     # 3. Fetch all live data and fundamental metrics
+    for ticker in wish_list['Ticker']:
+        try:
+            stock = yf.Ticker(ticker)
+    
     for ticker in wish_list['Ticker']:
         try:
             stock = yf.Ticker(ticker)
@@ -705,6 +717,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
