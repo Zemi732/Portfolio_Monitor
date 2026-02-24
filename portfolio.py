@@ -607,13 +607,15 @@ try:
     wish_list['Desired Price'] = pd.to_numeric(wish_list['Desired Price'], errors='coerce')
     
     # 2. Setup lists to hold our new Yahoo Finance data
-    actual_prices = []
-    ws_targets = []
-    year_lows = []
-    year_highs = []
-    pe_trailing = []
-    pe_forward = []
-    div_yields = []
+    except Exception as e:
+            # If Yahoo Finance fails to find the stock, append blanks so the lengths always match
+            actual_prices.append(None)
+            ws_targets.append(None)
+            year_lows.append(None)
+            year_highs.append(None)
+            pe_trailing.append(None)
+            pe_forward.append(None)
+            div_yields.append(None)
 
     # 3. Fetch all live data and fundamental metrics
     for ticker in wish_list['Ticker']:
@@ -709,6 +711,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
