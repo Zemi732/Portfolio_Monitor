@@ -480,22 +480,13 @@ if not df.empty:
             st.rerun()
 
     st.divider()
-    c_pie1, c_pie2 = st.columns(2)
     
-    with c_pie1:
-        st.write("### Core Distribution")
-        if not df_core.empty:
-            fig = px.pie(df_core, values='Market_Value_AUD', names='Ticker', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0)); fig.update_traces(textinfo='label+percent')
-            st.plotly_chart(fig, use_container_width=True)
-            
-    with c_pie2:
-        st.write("### USD Assets Distribution")
-        df_us_chart_data = df[(df['Category'] == 'US Market') | (df['Ticker'] == 'IWDA')].copy()
-        if not df_us_chart_data.empty:
-            fig = px.pie(df_us_chart_data, values='Market_Value_AUD', names='Ticker', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
-            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0)); fig.update_traces(textinfo='label+percent')
-            st.plotly_chart(fig, use_container_width=True)
+    st.write("### Core Distribution")
+    if not df_core.empty:
+        fig = px.pie(df_core, values='Market_Value_AUD', names='Ticker', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig.update_layout(margin=dict(t=0, b=0, l=0, r=0)); fig.update_traces(textinfo='label+percent')
+        # We shrink the container slightly so a single pie chart doesn't look too massive on a desktop screen
+        st.plotly_chart(fig, use_container_width=False)
 
     with st.sidebar:
         st.header("💰 Net Worth")
@@ -653,6 +644,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
