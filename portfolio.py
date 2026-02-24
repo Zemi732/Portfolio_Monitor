@@ -126,7 +126,6 @@ def load_data():
     total_realized_pl_lifetime = Decimal('0')
     
     try:
-        try:
         # ---> LIVE HOLDINGS CONNECTION <---
         sheet_url = "https://docs.google.com/spreadsheets/d/1yzFLgUMXo0iutBoEEEEstJl5EcXHHpKu6EG082fEWGI/export?format=csv"
         df_trades = pd.read_csv(sheet_url)
@@ -648,3 +647,4 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
