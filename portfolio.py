@@ -409,7 +409,7 @@ if not df.empty:
     
     st.sidebar.title("🎯 Targets")
     targets = {}
-    PRESETS = {'VUAA': 50, 'XUSE': 30, 'VAS': 10, 'EXCH': 10, EMXC': 0, 'QSML': 0}
+    PRESETS = {'VUAA': 50, 'XUSE': 30, 'VAS': 10, 'EXCH': 10, 'EMXC': 0, 'QSML': 0}
     st.sidebar.markdown("### 🟢 Core")
     for ticker in CORE_ORDER:
         if ticker in df['Ticker'].values:
@@ -716,6 +716,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
