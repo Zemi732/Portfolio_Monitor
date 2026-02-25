@@ -94,8 +94,8 @@ with st.sidebar:
 # ==========================================
 st.title("🇦🇺 ASX & 🇺🇸 US Portfolio Monitor")
 
-CORE_ORDER = ['VUAA', 'XUSE', EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML']
-CORE_TICKERS = ['VUAA', 'XUSE', EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML', 'IWDA']
+CORE_ORDER = ['VUAA', 'XUSE', 'EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML']
+CORE_TICKERS = ['VUAA', 'XUSE', 'EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML', 'IWDA']
 US_TICKERS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'TSLA', 'PLTR'] 
 
 # --- DEEP GEOGRAPHIC MAPPING (X-RAY) ---
@@ -716,6 +716,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
