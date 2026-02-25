@@ -131,7 +131,7 @@ GEO_MAP = {
 
 FX_SENSITIVITY = {
     'IWDA': 'Very High', 'XUSE': 'Very High', 'EXCH': 'Very High', 'VUAA': 'Very High', 'IVV': 'Very High', 'SEMI': 'Very High', 
-    'ATOM': 'Very High', 'WIRE': 'Very High', 'BHP': 'Very High', 'CSL': 'Very High', 'NDQ': 'Very High', 'HACK': 'Very High'
+    'ATOM': 'Very High', 'WIRE': 'Very High', 'BHP': 'Very High', 'CSL': 'Very High', 'NDQ': 'Very High', 'HACK': 'Very High',
     'VGS': 'High', 'BGBL': 'High', 'QSML': 'High', 'EMXC': 'High', 
     'QOR': 'High', 'PMGOLD': 'High', 'XRO': 'High',
     'VAS': 'Medium', 'VVLU': 'Medium',
@@ -716,6 +716,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
