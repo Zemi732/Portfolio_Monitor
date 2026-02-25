@@ -112,7 +112,7 @@ GEO_MAP = {
     
     # Global Developed (IWDA, BGBL, VGS track roughly the same MSCI World Index)
     'IWDA': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
-    'XUSE': {'Japan': 0.19, 'United Kingdom': 0.13, 'Canada': 0.12, 'France': 0.09', 'Germany': 0.08, 'Australia': 0.06, 'Rest of World': 0.33},
+    'XUSE': {'Japan': 0.19, 'United Kingdom': 0.13, 'Canada': 0.12, 'France': 0.09, 'Germany': 0.08, 'Australia': 0.06, 'Rest of World': 0.33},
     'BGBL': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
     'VGS': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
     'VVLU': {'United States': 0.65, 'Japan': 0.10, 'United Kingdom': 0.05, 'Rest of World': 0.20},
@@ -716,6 +716,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
