@@ -14,9 +14,9 @@ st.set_page_config(layout="wide", page_title="Portfolio Dashboard")
 MER_RATES = {
     'IVV': 0.04, 'IWDA': 0.20, 'BGBL': 0.08, 'VAS': 0.10, 'QSML': 0.35,
     'EMXC': 0.25, 'VGS': 0.18, 'VVLU': 0.28, 'ATOM': 0.69, 'SEMI': 0.45,
-    'WIRE': 0.65,
-    'PMGOLD': 0.00, 'WOW': 0.00, 'CSL': 0.00, 'BHP': 0.00, 'CBA': 0.00,
-    'GYG': 0.00, 'QOR': 0.00
+    'WIRE': 0.65, 'NDQ': 0.48, 'VUAA':0.07, 'XUSE': 0.15, 'EXCH':0.18, 
+    'HACK': 0.67, 'PMGOLD': 0.00, 'WOW': 0.00, 'CSL': 0.00, 'BHP': 0.00,
+    'CBA': 0.00, 'GYG': 0.00, 'QOR': 0.00
 }
 
 # ==========================================
@@ -94,8 +94,8 @@ with st.sidebar:
 # ==========================================
 st.title("🇦🇺 ASX & 🇺🇸 US Portfolio Monitor")
 
-CORE_ORDER = ['IWDA', 'BGBL', 'VAS', 'EMXC', 'QSML']
-CORE_TICKERS = ['IWDA', 'BGBL', 'VAS', 'EMXC', 'QSML']
+CORE_ORDER = ['VUAA', 'XUSE', EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML']
+CORE_TICKERS = ['VUAA', 'XUSE', EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML', 'IWDA']
 US_TICKERS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'TSLA', 'PLTR'] 
 
 # --- DEEP GEOGRAPHIC MAPPING (X-RAY) ---
@@ -108,10 +108,11 @@ GEO_MAP = {
     # Single Country: United States
     'NVDA': {'United States': 1.0}, 'MSFT': {'United States': 1.0}, 'AAPL': {'United States': 1.0}, 
     'AMZN': {'United States': 1.0}, 'TSLA': {'United States': 1.0}, 'PLTR': {'United States': 1.0}, 
-    'IVV': {'United States': 1.0},
+    'IVV': {'United States': 1.0}, 'VUAA': {'United States': 1.0},
     
     # Global Developed (IWDA, BGBL, VGS track roughly the same MSCI World Index)
     'IWDA': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
+    'XUSE': {'Japan': 0.19, 'United Kingdom': 0.13, 'Canada': 0.12, 'France': 0.09', 'Germany': 0.08, 'Australia': 0.06, 'Rest of World': 0.33},
     'BGBL': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
     'VGS': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
     'VVLU': {'United States': 0.65, 'Japan': 0.10, 'United Kingdom': 0.05, 'Rest of World': 0.20},
@@ -119,6 +120,7 @@ GEO_MAP = {
     
     # Emerging Markets (ex-China roughly)
     'EMXC': {'India': 0.25, 'Taiwan': 0.25, 'South Korea': 0.15, 'Brazil': 0.05, 'Rest of World': 0.30},
+    'EXCH': {'Taiwan': 0.29, 'South Korea': 0.21, 'India': 0.18, 'Brazil': 0.06, 'South Africa': 0.05, 'Rest of World': 0.21},
     
     # Thematics (Rough approximations, heavily US-skewed)
     'ATOM': {'United States': 0.70, 'Rest of World': 0.30}, 
@@ -128,8 +130,8 @@ GEO_MAP = {
 # ---------------------------------------
 
 FX_SENSITIVITY = {
-    'IWDA': 'Very High', 'IVV': 'Very High', 'SEMI': 'Very High', 
-    'ATOM': 'Very High', 'WIRE': 'Very High', 'BHP': 'Very High', 'CSL': 'Very High',
+    'IWDA': 'Very High', 'XUSE': 'Very High', 'EXCH': 'Very High', 'VUAA': 'Very High', 'IVV': 'Very High', 'SEMI': 'Very High', 
+    'ATOM': 'Very High', 'WIRE': 'Very High', 'BHP': 'Very High', 'CSL': 'Very High', 'NDQ': 'Very High', 'HACK': 'Very High'
     'VGS': 'High', 'BGBL': 'High', 'QSML': 'High', 'EMXC': 'High', 
     'QOR': 'High', 'PMGOLD': 'High', 'XRO': 'High',
     'VAS': 'Medium', 'VVLU': 'Medium',
@@ -407,7 +409,7 @@ if not df.empty:
     
     st.sidebar.title("🎯 Targets")
     targets = {}
-    PRESETS = {'IWDA': 35, 'BGBL': 20, 'VAS': 25, 'EMXC': 10, 'QSML': 10}
+    PRESETS = {'VUAA': 50, 'XUSE': 30, 'VAS': 10, 'EXCH': 10, EMXC': 0, 'QSML': 0}
     st.sidebar.markdown("### 🟢 Core")
     for ticker in CORE_ORDER:
         if ticker in df['Ticker'].values:
@@ -714,6 +716,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
