@@ -248,7 +248,6 @@ def load_data():
         return pd.DataFrame(), 0.0, 0.0
 
 # --- B. FETCH PRICES ---
-
 TICKER_MAP = {
     "MSFT": "MSFT",
     "EXCH": "EXCH.AS",
@@ -261,8 +260,14 @@ TICKER_MAP = {
 @st.cache_data(ttl=300)
 def fetch_market_data(ticker_list):
     prices = {}
-    fx_rates = {} # We cache the FX rates here so we only download them once per run
+    fx_multipliers = {}
     
+    # Fetch the USD to AUD exchange rate once to keep the app lightning fast
+    try:
+        usd_aud_rate = yf.Ticker("USDAUD=X").fast_info['last_price']
+    except:
+        usd_aud_rate = 1.0 # Safe fallback just in case Yahoo glitches
+        
     for t in ticker_list:
         if t in TICKER_MAP:
             yf_ticker = TICKER_MAP[t]
@@ -273,34 +278,21 @@ def fetch_market_data(ticker_list):
             
         try:
             ticker_obj = yf.Ticker(yf_ticker)
-            price = ticker_obj.fast_info['last_price']
+            # 1. Grab the raw USD or AUD price
+            prices[t] = float(ticker_obj.fast_info['last_price'])
             
-            # Detect the currency the asset is traded in
-            currency = ticker_obj.fast_info.get('currency', 'AUD')
-            
-            # LSE Pence Fix
-            if yf_ticker.endswith('.L') and currency == 'GBp':
-                price = price / 100
-                currency = 'GBP' # Upgrade to standard Pounds so the FX conversion works
-            
-            # --- NEW FX CONVERSION LOGIC ---
-            # If the currency is not AUD, convert it!
-            if currency != 'AUD' and currency != '':
-                if currency not in fx_rates:
-                    # Look up the live exchange rate (e.g., 'USDAUD=X' or 'EURAUD=X')
-                    fx_ticker = f"{currency}AUD=X"
-                    fx_rates[currency] = yf.Ticker(fx_ticker).fast_info['last_price']
+            # 2. Apply the correct multiplier
+            # If it's on the ASX, it's already AUD. Otherwise, it's USD.
+            if yf_ticker.endswith('.AX'):
+                fx_multipliers[t] = 1.0
+            else:
+                fx_multipliers[t] = usd_aud_rate
                 
-                # Multiply the foreign price by the exchange rate
-                price = price * fx_rates[currency]
-            # -------------------------------
-                
-            prices[t] = float(price)
-            
         except Exception as e:
             prices[t] = 0.0
+            fx_multipliers[t] = 1.0
             
-    return prices
+    return prices, fx_multipliers
     
 # --- FETCH EARNINGS DATES ---
 @st.cache_data(ttl=3600*12) 
@@ -764,6 +756,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
