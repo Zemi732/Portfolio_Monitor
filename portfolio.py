@@ -755,7 +755,6 @@ if not losers_df.empty:
 else:
     st.info("Market scanner currently unavailable. Check your connection.")
 # ---> END NEW SECTION <---
-else:
     if df.empty:
         st.info("Waiting for data...")
 
