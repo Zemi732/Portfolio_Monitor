@@ -247,7 +247,7 @@ def load_data():
         st.error(f"Error loading data: {e}")
         return pd.DataFrame(), 0.0, 0.0
         
-df['Live Price'] = df['Ticker'].apply(get_live_price)
+df['Live Price'] = df['Instrument Code'].apply(get_live_price)
 
 df, total_brokerage_val, total_lifetime_realized = load_data()
 
@@ -741,6 +741,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
