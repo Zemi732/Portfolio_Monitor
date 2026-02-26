@@ -422,7 +422,7 @@ df, total_brokerage_val, total_lifetime_realized = load_data()
 # --- D. MAIN EXECUTION ---
 if not df.empty:
     with st.spinner('Fetching market prices...'):
-        current_prices = fetch_market_data(df['Ticker'].tolist())
+        current_prices, fx_multipliers = fetch_market_data(ticker_list)
     
     with st.spinner('Checking earnings calendars...'):
         earnings_dates = fetch_earnings_dates(df['Ticker'].tolist())
@@ -496,61 +496,155 @@ if not df.empty:
     
     # --- TABLE CONSTRUCTION ---
     
-    df_core = df[df['Category'] == 'Core'].copy()
-    if not df_core.empty:
+        # --- PRE-TABLE FX MATH ---
+# (Make sure you mapped your prices and FX rates into the dataframe just before this)
+# df['Current_Price'] = df.index.map(current_prices)
+# df['FX Rate'] = df.index.map(fx_multipliers)
+
+# 1. Convert wealth metrics to AUD using the new FX Rate
+df['Market_Value_AUD'] = df['Shares'] * df['Current_Price'] * df['FX Rate']
+df['Gain_Loss_Native'] = (df['Current_Price'] - df['Avg_Price']) * df['Shares'] * df['FX Rate']
+df['Realized_PL_Active'] = df['Realized_PL_Active'] * df['FX Rate']
+
+# Recalculate the true total value in AUD
+total_value_aud = df['Market_Value_AUD'].sum()
+
+
+# --- TABLE CONSTRUCTION ---
+df_core = df[df['Category'] == 'Core'].copy()
+if not df_core.empty:
+    if 'CORE_ORDER' in globals():
         df_core['Ticker'] = pd.Categorical(df_core['Ticker'], categories=CORE_ORDER, ordered=True)
-        df_core = df_core.sort_values('Ticker')
-        if agg_row: df_core = pd.concat([df_core, pd.DataFrame([agg_row])], ignore_index=True)
-        # CALCULATION UPDATE: Distribution now based on GRAND TOTAL
-        df_core['Distribution'] = (df_core['Market_Value_AUD'] / total_value_aud) * 100
-        df_core['Profit'] = df_core['Gain_Loss_Native']
-        df_core['Realized P/L'] = df_core['Realized_PL_Active']
-        df_core = df_core.rename(columns={'Rise': 'P/L %', 'Profit': 'P/L', 'Current_Price': 'ASX Price'})
+    df_core = df_core.sort_values('Ticker')
+    if 'agg_row' in globals() and agg_row: 
+        df_core = pd.concat([df_core, pd.DataFrame([agg_row])], ignore_index=True)
+        
+    df_core['Distribution'] = (df_core['Market_Value_AUD'] / total_value_aud) * 100
+    df_core['Profit'] = df_core['Gain_Loss_Native']
+    df_core['Realized P/L'] = df_core['Realized_PL_Active']
+    df_core = df_core.rename(columns={
+        'Rise': 'P/L %', 
+        'Profit': 'P/L (AUD)', 
+        'Current_Price': 'ASX Price'
+    })
 
-    df_us = df[df['Category'] == 'US Market'].copy()
-    if not df_us.empty: 
-        df_us['Distribution'] = (df_us['Market_Value_AUD'] / total_value_aud) * 100
-        df_us['Profit'] = df_us['Gain_Loss_Native']
-        df_us['Realized P/L'] = df_us['Realized_PL_Active']
-        df_us = df_us.rename(columns={'Rise': 'P/L %', 'Profit': 'P/L', 'Current_Price': 'US Price (USD)', 'Avg_Price': 'Avg Price (USD)'})
+df_us = df[df['Category'] == 'US Market'].copy()
+if not df_us.empty: 
+    df_us['Distribution'] = (df_us['Market_Value_AUD'] / total_value_aud) * 100
+    df_us['Profit'] = df_us['Gain_Loss_Native']
+    df_us['Realized P/L'] = df_us['Realized_PL_Active']
+    df_us = df_us.rename(columns={
+        'Rise': 'P/L %', 
+        'Profit': 'P/L (AUD)', 
+        'Current_Price': 'Price (USD)', 
+        'Avg_Price': 'Avg Price (USD)'
+    })
 
-    df_sat = df[df['Category'] == 'Satellite'].copy()
-    if not df_sat.empty: 
-        df_sat = df_sat.sort_values('Rise', ascending=False)
-        sat_total = df_sat['Market_Value_AUD'].sum()
-        df_sat['Distribution'] = (df_sat['Market_Value_AUD'] / total_value_aud) * 100
-        df_sat['Profit'] = df_sat['Gain_Loss_Native']
-        df_sat['Realized P/L'] = df_sat['Realized_PL_Active']
-        df_sat = df_sat.rename(columns={'Rise': 'P/L %', 'Profit': 'P/L', 'Current_Price': 'ASX Price'})
-
-    st.subheader("🪐 Core Portfolio (With Fund)")
-    if not df_core.empty:
-        cols_core = ['Ticker', 'Shares', 'Avg_Price', 'ASX Price', 'P/L %', 'P/L', 'Realized P/L', 'FX Tilt', 'Market_Value_AUD', 'Target_%', 'Deficit', 'Distribution']
-        st.dataframe(apply_portfolio_styling(df_core[cols_core], 'ASX Price'))
-
-    st.subheader("🛰️ Satellite Fund Composition")
-    if not df_sat.empty:
-        cols_sat = ['Ticker', 'Shares', 'Avg_Price', 'ASX Price', 'P/L %', 'P/L', 'Realized P/L', 'FX Tilt', 'Next Earnings', 'Market_Value_AUD', 'Distribution']
-        st.dataframe(apply_portfolio_styling(df_sat[cols_sat], 'ASX Price'))
-
-    st.subheader("🦅 US Market")
-    if not df_us.empty:
-        cols_us = ['Ticker', 'Shares', 'Avg Price (USD)', 'US Price (USD)', 'P/L %', 'P/L', 'Realized P/L', 'FX Tilt', 'Next Earnings', 'Market_Value_AUD', 'Distribution']
-        st.dataframe(apply_portfolio_styling(df_us[cols_us], 'US Price (USD)', 'Avg Price (USD)'))
-    else: st.info("No US holdings.")
+df_sat = df[df['Category'] == 'Satellite'].copy()
+if not df_sat.empty: 
+    df_sat = df_sat.sort_values('Rise', ascending=False)
+    df_sat['Distribution'] = (df_sat['Market_Value_AUD'] / total_value_aud) * 100
+    df_sat['Profit'] = df_sat['Gain_Loss_Native']
+    df_sat['Realized P/L'] = df_sat['Realized_PL_Active']
     
-    if api_missing_tickers:
-        st.divider()
-        st.warning(f"⚠️ Manual Input Required: {len(api_missing_tickers)} prices could not be fetched.")
-        init_data = [{'Ticker': t, 'Manual_Price': st.session_state["manual_prices_storage"].get(t, 0.0)} for t in api_missing_tickers]
-        df_missing_input = pd.DataFrame(init_data)
-        edited_df = st.data_editor(df_missing_input, key="manual_editor", hide_index=True, num_rows="fixed")
-        if not edited_df.equals(df_missing_input):
-            new_map = dict(zip(edited_df['Ticker'], edited_df['Manual_Price']))
-            st.session_state["manual_prices_storage"].update(new_map)
-            st.rerun()
+    # Since you mentioned non-ASX are in USD, we label Satellite prices as USD
+    df_sat = df_sat.rename(columns={
+        'Rise': 'P/L %', 
+        'Profit': 'P/L (AUD)', 
+        'Current_Price': 'Price (USD)',
+        'Avg_Price': 'Avg Price (USD)'
+    })
 
+# --- PRE-TABLE FX MATH ---
+# (Make sure you mapped your prices and FX rates into the dataframe just before this)
+# df['Current_Price'] = df.index.map(current_prices)
+# df['FX Rate'] = df.index.map(fx_multipliers)
+
+# 1. Convert wealth metrics to AUD using the new FX Rate
+df['Market_Value_AUD'] = df['Shares'] * df['Current_Price'] * df['FX Rate']
+df['Gain_Loss_Native'] = (df['Current_Price'] - df['Avg_Price']) * df['Shares'] * df['FX Rate']
+df['Realized_PL_Active'] = df['Realized_PL_Active'] * df['FX Rate']
+
+# Recalculate the true total value in AUD
+total_value_aud = df['Market_Value_AUD'].sum()
+
+
+# --- TABLE CONSTRUCTION ---
+df_core = df[df['Category'] == 'Core'].copy()
+if not df_core.empty:
+    if 'CORE_ORDER' in globals():
+        df_core['Ticker'] = pd.Categorical(df_core['Ticker'], categories=CORE_ORDER, ordered=True)
+    df_core = df_core.sort_values('Ticker')
+    if 'agg_row' in globals() and agg_row: 
+        df_core = pd.concat([df_core, pd.DataFrame([agg_row])], ignore_index=True)
+        
+    df_core['Distribution'] = (df_core['Market_Value_AUD'] / total_value_aud) * 100
+    df_core['Profit'] = df_core['Gain_Loss_Native']
+    df_core['Realized P/L'] = df_core['Realized_PL_Active']
+    df_core = df_core.rename(columns={
+        'Rise': 'P/L %', 
+        'Profit': 'P/L (AUD)', 
+        'Current_Price': 'ASX Price'
+    })
+
+df_us = df[df['Category'] == 'US Market'].copy()
+if not df_us.empty: 
+    df_us['Distribution'] = (df_us['Market_Value_AUD'] / total_value_aud) * 100
+    df_us['Profit'] = df_us['Gain_Loss_Native']
+    df_us['Realized P/L'] = df_us['Realized_PL_Active']
+    df_us = df_us.rename(columns={
+        'Rise': 'P/L %', 
+        'Profit': 'P/L (AUD)', 
+        'Current_Price': 'Price (USD)', 
+        'Avg_Price': 'Avg Price (USD)'
+    })
+
+df_sat = df[df['Category'] == 'Satellite'].copy()
+if not df_sat.empty: 
+    df_sat = df_sat.sort_values('Rise', ascending=False)
+    df_sat['Distribution'] = (df_sat['Market_Value_AUD'] / total_value_aud) * 100
+    df_sat['Profit'] = df_sat['Gain_Loss_Native']
+    df_sat['Realized P/L'] = df_sat['Realized_PL_Active']
+    
+    # Since you mentioned non-ASX are in USD, we label Satellite prices as USD
+    df_sat = df_sat.rename(columns={
+        'Rise': 'P/L %', 
+        'Profit': 'P/L (AUD)', 
+        'Current_Price': 'Price (USD)',
+        'Avg_Price': 'Avg Price (USD)'
+    })
+
+# --- DISPLAY ---
+st.subheader("🪐 Core Portfolio (With Fund)")
+if not df_core.empty:
+    cols_core = ['Ticker', 'Shares', 'Avg_Price', 'ASX Price', 'P/L %', 'P/L (AUD)', 'Realized P/L', 'FX Tilt', 'Market_Value_AUD', 'Target_%', 'Deficit', 'Distribution']
+    # If Target_% or Deficit aren't in your dataframe yet, remove them from cols_core
+    st.dataframe(apply_portfolio_styling(df_core[cols_core], 'ASX Price'))
+
+st.subheader("🛰️ Satellite Fund Composition")
+if not df_sat.empty:
+    cols_sat = ['Ticker', 'Shares', 'Avg Price (USD)', 'Price (USD)', 'P/L %', 'P/L (AUD)', 'Realized P/L', 'FX Tilt', 'Next Earnings', 'Market_Value_AUD', 'Distribution']
+    st.dataframe(apply_portfolio_styling(df_sat[cols_sat], 'Price (USD)'))
+
+st.subheader("🦅 US Market")
+if not df_us.empty:
+    cols_us = ['Ticker', 'Shares', 'Avg Price (USD)', 'Price (USD)', 'P/L %', 'P/L (AUD)', 'Realized P/L', 'FX Tilt', 'Next Earnings', 'Market_Value_AUD', 'Distribution']
+    st.dataframe(apply_portfolio_styling(df_us[cols_us], 'Price (USD)', 'Avg Price (USD)'))
+else: 
+    st.info("No US holdings.")
+    
+if api_missing_tickers:
     st.divider()
+    st.warning(f"⚠️ Manual Input Required: {len(api_missing_tickers)} prices could not be fetched.")
+    init_data = [{'Ticker': t, 'Manual_Price': st.session_state["manual_prices_storage"].get(t, 0.0)} for t in api_missing_tickers]
+    df_missing_input = pd.DataFrame(init_data)
+    edited_df = st.data_editor(df_missing_input, key="manual_editor", hide_index=True, num_rows="fixed")
+    if not edited_df.equals(df_missing_input):
+        new_map = dict(zip(edited_df['Ticker'], edited_df['Manual_Price']))
+        st.session_state["manual_prices_storage"].update(new_map)
+        st.rerun()
+
+st.divider()
     c_pie1, c_pie2 = st.columns(2)
     
     with c_pie1:
@@ -756,6 +850,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
