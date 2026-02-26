@@ -248,21 +248,22 @@ def load_data():
         return pd.DataFrame(), 0.0, 0.0
 
 # --- B. FETCH PRICES ---
+
 TICKER_MAP = {
     "MSFT": "MSFT",
     "EXCH": "EXCH.AS",
     "VUAA": "VUAA.L",
     "XUSE": "XUSE.SW",
     "PMGOLD": "PMGOLD.AX",
-    "IWDA": "IWDA.L" # Carried over from your original code
+    "IWDA": "IWDA.L" 
 }
 
 @st.cache_data(ttl=300)
 def fetch_market_data(ticker_list):
     prices = {}
+    fx_rates = {} # We cache the FX rates here so we only download them once per run
     
     for t in ticker_list:
-        # 1. Translate the ticker using the map, US_TICKERS, or default to .AX
         if t in TICKER_MAP:
             yf_ticker = TICKER_MAP[t]
         elif 'US_TICKERS' in globals() and t in US_TICKERS:
@@ -270,20 +271,33 @@ def fetch_market_data(ticker_list):
         else:
             yf_ticker = f"{t}.AX"
             
-        # 2. Fetch the price using the resilient fast_info method
         try:
             ticker_obj = yf.Ticker(yf_ticker)
             price = ticker_obj.fast_info['last_price']
             
-            # 3. Fix for London Exchange quoting in pence (GBp)
-            currency = ticker_obj.fast_info.get('currency', '')
+            # Detect the currency the asset is traded in
+            currency = ticker_obj.fast_info.get('currency', 'AUD')
+            
+            # LSE Pence Fix
             if yf_ticker.endswith('.L') and currency == 'GBp':
                 price = price / 100
+                currency = 'GBP' # Upgrade to standard Pounds so the FX conversion works
+            
+            # --- NEW FX CONVERSION LOGIC ---
+            # If the currency is not AUD, convert it!
+            if currency != 'AUD' and currency != '':
+                if currency not in fx_rates:
+                    # Look up the live exchange rate (e.g., 'USDAUD=X' or 'EURAUD=X')
+                    fx_ticker = f"{currency}AUD=X"
+                    fx_rates[currency] = yf.Ticker(fx_ticker).fast_info['last_price']
+                
+                # Multiply the foreign price by the exchange rate
+                price = price * fx_rates[currency]
+            # -------------------------------
                 
             prices[t] = float(price)
             
         except Exception as e:
-            # Fails gracefully and returns 0.0 so your app doesn't crash
             prices[t] = 0.0
             
     return prices
@@ -750,6 +764,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
