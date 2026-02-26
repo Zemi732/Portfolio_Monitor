@@ -740,11 +740,9 @@ def get_asx_losers():
         recent_data = data.iloc[-2:] 
         pct_change = ((recent_data.iloc[1] - recent_data.iloc[0]) / recent_data.iloc[0]) * 100
         
-        # Isolate the top 5 losers
-        losers = pct_change.sort_values().head(5)
+        # Isolate the top 10 losers
+        losers = pct_change.sort_values().head(10)
         
-        # ---> NEW: Fetch 52-week data ONLY for the 5 losers (keeps it fast) <---
-       
         year_lows = []
         year_highs = []
         for t in losers.index:
@@ -755,12 +753,23 @@ def get_asx_losers():
                 
             try: year_highs.append(stock_info['year_high'])
             except: year_highs.append(None)
+            
+        last_prices = recent_data.iloc[1][losers.index].values
+        
+        # Calculate the new "Above 52W Low" metric
+        above_52w_low = []
+        for lp, yl in zip(last_prices, year_lows):
+            if pd.notna(lp) and pd.notna(yl) and yl > 0:
+                above_52w_low.append(((lp - yl) / yl) * 100)
+            else:
+                above_52w_low.append(None)
         
         losers_df = pd.DataFrame({
             'Ticker': losers.index.str.replace('.AX', '', regex=False),
             'Company': df_asx200.set_index('Code').loc[losers.index.str.replace('.AX', '', regex=False)]['Company'].values,
             'Drop %': losers.values,
-            'Last Price': recent_data.iloc[1][losers.index].values,
+            'Last Price': last_prices,
+            'Above 52W Low': above_52w_low,
             '52W Low': year_lows,
             '52W High': year_highs
         })
@@ -778,23 +787,22 @@ if not losers_df.empty:
         styles = [''] * len(row)
         
         # 1. Always make the Drop % red
-        drop_idx = row.index.get_loc('Drop %')
-        styles[drop_idx] = 'color: #c62828; font-weight: bold;'
+        if 'Drop %' in row.index:
+            drop_idx = row.index.get_loc('Drop %')
+            styles[drop_idx] = 'color: #c62828; font-weight: bold;'
         
         # 2. The 5% Bargain Zone Logic
-        last_price = row['Last Price']
-        low_52 = row['52W Low']
-        
-        if pd.notna(last_price) and pd.notna(low_52) and low_52 > 0:
-            # If the current price is equal to or within 5% of the 52-week bottom
-            if last_price <= (low_52 * 1.05):
+        if 'Above 52W Low' in row.index:
+            above_val = row['Above 52W Low']
+            if pd.notna(above_val) and above_val <= 5.0:
                 price_idx = row.index.get_loc('Last Price')
                 low_idx = row.index.get_loc('52W Low')
+                above_idx = row.index.get_loc('Above 52W Low')
                 
-                # Highlight both the current price and the 52W low in bright green
                 highlight = 'color: #00FF00; font-weight: bold;'
                 styles[price_idx] = highlight
                 styles[low_idx] = highlight
+                styles[above_idx] = highlight
                 
         return styles
 
@@ -804,6 +812,7 @@ if not losers_df.empty:
         .format({
             'Drop %': '{:.2f}%',
             'Last Price': '${:.2f}',
+            'Above 52W Low': '+{:.2f}%',
             '52W Low': '${:.2f}',
             '52W High': '${:.2f}'
         }, na_rep="-")
@@ -811,6 +820,7 @@ if not losers_df.empty:
     st.dataframe(styled_losers, hide_index=True, use_container_width=True)
 else:
     st.info("Market scanner currently unavailable. Check your connection.")
+# ---> END NEW SECTION <---
 
 # ---> NEW SECTION: ASX 200 BOTTOM DRIFTERS <---
 st.subheader("⚓ ASX 200 Bottom Drifters (Near 52W Low)")
@@ -855,12 +865,12 @@ def get_asx_bottom_drifters():
         # 4. Find how far the current price is above the 52W Low (in percentage)
         distance_to_low = ((current_prices - year_lows) / year_lows) * 100
         
-        # 5. Grab the 5 stocks closest to 0% (closest to the bottom)
-        bottom_5 = distance_to_low.sort_values().head(5)
+        # 5. Grab the 10 stocks closest to 0%
+        bottom_10 = distance_to_low.sort_values().head(10)
         
-        # ---> NEW: Fetch Next Earnings ONLY for these 5 stocks <---
+        # Fetch Next Earnings ONLY for these 10 stocks
         earnings_dates = []
-        for t in bottom_5.index:
+        for t in bottom_10.index:
             try:
                 cal = yf.Ticker(t).calendar
                 if cal is not None and 'Earnings Date' in cal and len(cal['Earnings Date']) > 0:
@@ -871,12 +881,12 @@ def get_asx_bottom_drifters():
                 earnings_dates.append(None)
         
         drifters_df = pd.DataFrame({
-            'Ticker': bottom_5.index.str.replace('.AX', '', regex=False),
-            'Company': df_asx200.set_index('Code').loc[bottom_5.index.str.replace('.AX', '', regex=False)]['Company'].values,
-            'Above 52W Low': bottom_5.values,
-            'Last Price': current_prices[bottom_5.index].values,
-            '52W Low': year_lows[bottom_5.index].values,
-            '52W High': year_highs[bottom_5.index].values,
+            'Ticker': bottom_10.index.str.replace('.AX', '', regex=False),
+            'Company': df_asx200.set_index('Code').loc[bottom_10.index.str.replace('.AX', '', regex=False)]['Company'].values,
+            'Above 52W Low': bottom_10.values,
+            'Last Price': current_prices[bottom_10.index].values,
+            '52W Low': year_lows[bottom_10.index].values,
+            '52W High': year_highs[bottom_10.index].values,
             'Next Earnings': earnings_dates
         })
         return drifters_df
@@ -927,6 +937,8 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
+
 
 
 
