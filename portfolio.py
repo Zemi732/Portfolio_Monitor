@@ -811,11 +811,123 @@ if not losers_df.empty:
     st.dataframe(styled_losers, hide_index=True, use_container_width=True)
 else:
     st.info("Market scanner currently unavailable. Check your connection.")
+
+# ---> NEW SECTION: ASX 200 BOTTOM DRIFTERS <---
+st.subheader("⚓ ASX 200 Bottom Drifters (Near 52W Low)")
+
+@st.cache_data(ttl=3600)
+def get_asx_bottom_drifters():
+    try:
+        import requests
+        import datetime
+        
+        # 1. Grab the ASX 200 list
+        url = 'https://en.wikipedia.org/wiki/S%26P/ASX_200'
+        header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        req = requests.get(url, headers=header)
+        tables = pd.read_html(req.text)
+        
+        df_asx200 = None
+        for table in tables:
+            if 'Code' in table.columns and 'Company' in table.columns:
+                df_asx200 = table
+                break
+                
+        if df_asx200 is None: return pd.DataFrame()
+        
+        tickers = df_asx200['Code'].astype(str) + '.AX'
+        ticker_list = tickers.tolist()
+
+        # 2. Bulk download 1 YEAR of data to find the true bottoms
+        data = yf.download(ticker_list, period="1y", progress=False)
+        
+        if data.empty: return pd.DataFrame()
+        
+        closes = data['Close']
+        lows = data['Low']
+        highs = data['High']
+        
+        # 3. Calculate metrics
+        current_prices = closes.iloc[-1]
+        year_lows = lows.min()
+        year_highs = highs.max()
+        
+        # 4. Find how far the current price is above the 52W Low (in percentage)
+        distance_to_low = ((current_prices - year_lows) / year_lows) * 100
+        
+        # 5. Grab the 5 stocks closest to 0% (closest to the bottom)
+        bottom_5 = distance_to_low.sort_values().head(5)
+        
+        # ---> NEW: Fetch Next Earnings ONLY for these 5 stocks <---
+        earnings_dates = []
+        for t in bottom_5.index:
+            try:
+                cal = yf.Ticker(t).calendar
+                if cal is not None and 'Earnings Date' in cal and len(cal['Earnings Date']) > 0:
+                    earnings_dates.append(cal['Earnings Date'][0].date())
+                else:
+                    earnings_dates.append(None)
+            except:
+                earnings_dates.append(None)
+        
+        drifters_df = pd.DataFrame({
+            'Ticker': bottom_5.index.str.replace('.AX', '', regex=False),
+            'Company': df_asx200.set_index('Code').loc[bottom_5.index.str.replace('.AX', '', regex=False)]['Company'].values,
+            'Above 52W Low': bottom_5.values,
+            'Last Price': current_prices[bottom_5.index].values,
+            '52W Low': year_lows[bottom_5.index].values,
+            '52W High': year_highs[bottom_5.index].values,
+            'Next Earnings': earnings_dates
+        })
+        return drifters_df
+        
+    except Exception as e:
+        st.error(f"Bottom Drifters Error: {e}")
+        return pd.DataFrame()
+
+with st.spinner('Scanning for bottom drifters...'):
+    drifters_df = get_asx_bottom_drifters()
+
+if not drifters_df.empty:
+    import datetime
+    def style_drifters(row):
+        styles = [''] * len(row)
+        
+        # Highlight the percentage column in bright green
+        if 'Above 52W Low' in row.index:
+            dist_idx = row.index.get_loc('Above 52W Low')
+            styles[dist_idx] = 'color: #00FF00; font-weight: bold;'
+            
+        # Highlight Next Earnings if it's within 7 days
+        if 'Next Earnings' in row.index:
+            earn_val = row['Next Earnings']
+            if pd.notna(earn_val) and isinstance(earn_val, datetime.date):
+                delta = (earn_val - datetime.date.today()).days
+                if 0 <= delta <= 7:
+                    earn_idx = row.index.get_loc('Next Earnings')
+                    styles[earn_idx] = 'background-color: #c62828; color: white; font-weight: bold;'
+        
+        return styles
+
+    styled_drifters = (
+        drifters_df.style
+        .apply(style_drifters, axis=1)
+        .format({
+            'Above 52W Low': '+{:.2f}%',
+            'Last Price': '${:.2f}',
+            '52W Low': '${:.2f}',
+            '52W High': '${:.2f}'
+        }, na_rep="-")
+    )
+    st.dataframe(styled_drifters, hide_index=True, use_container_width=True)
+else:
+    st.info("Bottom drifter scanner currently unavailable.")
 # ---> END NEW SECTION <---
 
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
