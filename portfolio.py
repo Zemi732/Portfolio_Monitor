@@ -411,6 +411,8 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
         return styles
     return dataframe.style.format(format_dict).apply(custom_styler, axis=1)
 
+df, total_brokerage_val, total_lifetime_realized = load_data()
+
 # --- D. MAIN EXECUTION ---
 if not df.empty:
     with st.spinner('Fetching market prices...'):
@@ -748,6 +750,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
