@@ -708,29 +708,57 @@ st.subheader("📉 ASX 200 Daily Losers (Bargain Scanner)")
 @st.cache_data(ttl=3600)
 def get_asx_losers():
     try:
+        import requests
+        
+        # 1. Disguise the script as a normal web browser
         url = 'https://en.wikipedia.org/wiki/S%26P/ASX_200'
-        tables = pd.read_html(url)
-        df_asx200 = tables[0]
+        header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        req = requests.get(url, headers=header)
+        tables = pd.read_html(req.text)
+        
+        # 2. Dynamically hunt for the correct table (no matter where it moves)
+        df_asx200 = None
+        for table in tables:
+            if 'Code' in table.columns and 'Company' in table.columns:
+                df_asx200 = table
+                break
+                
+        if df_asx200 is None:
+            st.error("Error: Could not find the ASX 200 constituents table on Wikipedia.")
+            return pd.DataFrame()
         
         tickers = df_asx200['Code'].astype(str) + '.AX'
         ticker_list = tickers.tolist()
 
-        data = yf.download(ticker_list, period="5d", progress=False)['Close']
+        # 3. Fetch the data from Yahoo Finance
+        data = yf.download(ticker_list, period="5d", progress=False)
         
+        # Handle different versions of yfinance returning multi-level columns
+        if 'Close' in data.columns:
+            data = data['Close']
+            
+        if data.empty or len(data) < 2:
+            st.error("Error: Not enough recent price data available from Yahoo Finance.")
+            return pd.DataFrame()
+        
+        # 4. Calculate the drop
         recent_data = data.iloc[-2:] 
         pct_change = ((recent_data.iloc[1] - recent_data.iloc[0]) / recent_data.iloc[0]) * 100
         
+        # 5. Grab the top 5 biggest drops
         losers = pct_change.sort_values().head(5)
         
         losers_df = pd.DataFrame({
-            'Ticker': losers.index.str.replace('.AX', ''),
-            'Company': df_asx200.set_index('Code').loc[losers.index.str.replace('.AX', '')]['Company'].values,
+            'Ticker': losers.index.str.replace('.AX', '', regex=False),
+            'Company': df_asx200.set_index('Code').loc[losers.index.str.replace('.AX', '', regex=False)]['Company'].values,
             'Drop %': losers.values,
             'Last Price': recent_data.iloc[1][losers.index].values
         })
         return losers_df
         
     except Exception as e:
+        # If it fails again, it will print the EXACT error message to your dashboard
+        st.error(f"Bargain Scanner Error: {e}")
         return pd.DataFrame()
 
 with st.spinner('Scanning ASX 200 for bargains...'):
@@ -753,5 +781,6 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
