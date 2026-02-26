@@ -246,41 +246,48 @@ def load_data():
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return pd.DataFrame(), 0.0, 0.0
-        
-df['Live Price'] = df['Instrument Code'].apply(get_live_price)
-
-df, total_brokerage_val, total_lifetime_realized = load_data()
 
 # --- B. FETCH PRICES ---
-@st.cache_data
+TICKER_MAP = {
+    "MSFT": "MSFT",
+    "EXCH": "EXCH.AS",
+    "VUAA": "VUAA.L",
+    "XUSE": "XUSE.SW",
+    "PMGOLD": "PMGOLD.AX",
+    "IWDA": "IWDA.L" # Carried over from your original code
+}
+
+@st.cache_data(ttl=300)
 def fetch_market_data(ticker_list):
     prices = {}
-    formatted_lookup = {}
-    download_list = []
     
     for t in ticker_list:
-        if t in US_TICKERS: formatted = t 
-        elif t == 'IWDA': formatted = 'IWDA.L'
-        else: formatted = f"{t}.AX"
-        formatted_lookup[t] = formatted
-        download_list.append(formatted)
-    
-    try: data = yf.download(download_list, period="1d", progress=False)['Close']
-    except: data = pd.DataFrame()
-
-    for t in ticker_list:
-        price = 0.0
-        lookup_symbol = formatted_lookup[t]
+        # 1. Translate the ticker using the map, US_TICKERS, or default to .AX
+        if t in TICKER_MAP:
+            yf_ticker = TICKER_MAP[t]
+        elif 'US_TICKERS' in globals() and t in US_TICKERS:
+            yf_ticker = t
+        else:
+            yf_ticker = f"{t}.AX"
+            
+        # 2. Fetch the price using the resilient fast_info method
         try:
-            if len(download_list) == 1 and not data.empty: val = float(data.iloc[-1])
-            elif not data.empty and lookup_symbol in data: val = float(data[lookup_symbol].iloc[-1])
-            else: val = 0.0
-            if pd.isna(val): price = 0.0
-            else: price = val
-        except: price = 0.0
-        prices[t] = price
+            ticker_obj = yf.Ticker(yf_ticker)
+            price = ticker_obj.fast_info['last_price']
+            
+            # 3. Fix for London Exchange quoting in pence (GBp)
+            currency = ticker_obj.fast_info.get('currency', '')
+            if yf_ticker.endswith('.L') and currency == 'GBp':
+                price = price / 100
+                
+            prices[t] = float(price)
+            
+        except Exception as e:
+            # Fails gracefully and returns 0.0 so your app doesn't crash
+            prices[t] = 0.0
+            
     return prices
-
+    
 # --- FETCH EARNINGS DATES ---
 @st.cache_data(ttl=3600*12) 
 def fetch_earnings_dates(ticker_list):
@@ -741,6 +748,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
