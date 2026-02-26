@@ -22,6 +22,29 @@ MER_RATES = {
 # ==========================================
 # 1. SIDEBAR: FETCH & EDIT FX RATES
 # ==========================================
+TICKER_MAP = {
+    "MSFT": "MSFT",
+    "EXCH": "EXCH.AS",
+    "VUAA": "VUAA.L",
+    "XUSE": "XUSE.SW",
+    "PMGOLD": "PMGOLD.AX"
+}
+
+@st.cache_data(ttl=300)
+def get_live_price(sheet_ticker):
+    if not sheet_ticker or pd.isna(sheet_ticker):
+        return None
+    yf_ticker = TICKER_MAP.get(sheet_ticker, sheet_ticker)
+    try:
+        ticker_obj = yf.Ticker(yf_ticker)
+        price = ticker_obj.fast_info['last_price']
+        currency = ticker_obj.fast_info.get('currency', '')
+        if yf_ticker.endswith('.L') and currency == 'GBp':
+            price = price / 100
+        return price
+    except Exception as e:
+        return None
+
 with st.sidebar:
     st.header("Global Settings")
 
@@ -165,7 +188,7 @@ def load_data():
         df_trades['Trade Date'] = pd.to_datetime(df_trades['Trade Date'], dayfirst=True, format='mixed')
         df_trades = df_trades.sort_values('Trade Date', ascending=True)
         holdings_dict = {}
-
+        
         for ticker, group in df_trades.groupby('Instrument Code'):
             total_shares_calc = Decimal('0')
             total_cost = Decimal('0')
@@ -223,6 +246,8 @@ def load_data():
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return pd.DataFrame(), 0.0, 0.0
+        
+df['Live Price'] = df['Ticker'].apply(get_live_price)
 
 df, total_brokerage_val, total_lifetime_realized = load_data()
 
@@ -716,6 +741,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
