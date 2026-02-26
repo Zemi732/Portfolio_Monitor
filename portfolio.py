@@ -744,16 +744,17 @@ def get_asx_losers():
         losers = pct_change.sort_values().head(5)
         
         # ---> NEW: Fetch 52-week data ONLY for the 5 losers (keeps it fast) <---
+       
         year_lows = []
         year_highs = []
         for t in losers.index:
-            try:
-                info = yf.Ticker(t).fast_info
-                year_lows.append(info.get('year_low', None))
-                year_highs.append(info.get('year_high', None))
-            except:
-                year_lows.append(None)
-                year_highs.append(None)
+            stock_info = yf.Ticker(t).fast_info
+            
+            try: year_lows.append(stock_info['year_low'])
+            except: year_lows.append(None)
+                
+            try: year_highs.append(stock_info['year_high'])
+            except: year_highs.append(None)
         
         losers_df = pd.DataFrame({
             'Ticker': losers.index.str.replace('.AX', '', regex=False),
@@ -791,6 +792,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
