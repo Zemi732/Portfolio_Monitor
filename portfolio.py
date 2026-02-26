@@ -701,32 +701,27 @@ try:
 
 except FileNotFoundError:
     st.warning("Could not find 'Wish list.csv'. Please make sure it is saved in the exact same folder as your script.")
+
 # ---> NEW SECTION: ASX 200 BARGAIN SCANNER <---
 st.subheader("📉 ASX 200 Daily Losers (Bargain Scanner)")
 
-@st.cache_data(ttl=3600) # Caches for 1 hour so it doesn't slow down your app refresh
+@st.cache_data(ttl=3600)
 def get_asx_losers():
     try:
-        # 1. Grab the current ASX 200 list and company names from Wikipedia
         url = 'https://en.wikipedia.org/wiki/S%26P/ASX_200'
         tables = pd.read_html(url)
         df_asx200 = tables[0]
         
-        # Format tickers for Yahoo Finance (e.g., CBA -> CBA.AX)
         tickers = df_asx200['Code'].astype(str) + '.AX'
         ticker_list = tickers.tolist()
 
-        # 2. Bulk download the last 5 days of closing prices (super fast in one batch)
         data = yf.download(ticker_list, period="5d", progress=False)['Close']
         
-        # 3. Calculate the percentage drop between the last two trading days
         recent_data = data.iloc[-2:] 
         pct_change = ((recent_data.iloc[1] - recent_data.iloc[0]) / recent_data.iloc[0]) * 100
         
-        # 4. Find the 5 stocks with the biggest negative drop
         losers = pct_change.sort_values().head(5)
         
-        # 5. Build a clean dataframe with Company Names
         losers_df = pd.DataFrame({
             'Ticker': losers.index.str.replace('.AX', ''),
             'Company': df_asx200.set_index('Code').loc[losers.index.str.replace('.AX', '')]['Company'].values,
@@ -742,7 +737,6 @@ with st.spinner('Scanning ASX 200 for bargains...'):
     losers_df = get_asx_losers()
 
 if not losers_df.empty:
-    # Style it to look sharp with red text for the drops
     styled_losers = (
         losers_df.style
         .map(lambda x: 'color: #c62828; font-weight: bold;', subset=['Drop %'])
@@ -755,6 +749,9 @@ if not losers_df.empty:
 else:
     st.info("Market scanner currently unavailable. Check your connection.")
 # ---> END NEW SECTION <---
-    if df.empty:
-        st.info("Waiting for data...")
+
+# --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
+if df.empty:
+    st.info("Waiting for data...")
+
 
