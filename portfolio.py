@@ -774,9 +774,33 @@ with st.spinner('Scanning ASX 200 for bargains...'):
     losers_df = get_asx_losers()
 
 if not losers_df.empty:
+    def style_bargain_scanner(row):
+        styles = [''] * len(row)
+        
+        # 1. Always make the Drop % red
+        drop_idx = row.index.get_loc('Drop %')
+        styles[drop_idx] = 'color: #c62828; font-weight: bold;'
+        
+        # 2. The 5% Bargain Zone Logic
+        last_price = row['Last Price']
+        low_52 = row['52W Low']
+        
+        if pd.notna(last_price) and pd.notna(low_52) and low_52 > 0:
+            # If the current price is equal to or within 5% of the 52-week bottom
+            if last_price <= (low_52 * 1.05):
+                price_idx = row.index.get_loc('Last Price')
+                low_idx = row.index.get_loc('52W Low')
+                
+                # Highlight both the current price and the 52W low in bright green
+                highlight = 'color: #00FF00; font-weight: bold;'
+                styles[price_idx] = highlight
+                styles[low_idx] = highlight
+                
+        return styles
+
     styled_losers = (
         losers_df.style
-        .map(lambda x: 'color: #c62828; font-weight: bold;', subset=['Drop %'])
+        .apply(style_bargain_scanner, axis=1)
         .format({
             'Drop %': '{:.2f}%',
             'Last Price': '${:.2f}',
@@ -792,6 +816,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
