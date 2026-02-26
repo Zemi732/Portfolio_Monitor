@@ -644,7 +644,7 @@ if api_missing_tickers:
         st.session_state["manual_prices_storage"].update(new_map)
         st.rerun()
 
-st.divider()
+    st.divider()
     c_pie1, c_pie2 = st.columns(2)
     
     with c_pie1:
@@ -850,6 +850,7 @@ except FileNotFoundError:
 
 else:
     st.info("Waiting for data...")
+
 
 
 
