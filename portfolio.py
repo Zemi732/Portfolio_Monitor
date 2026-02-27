@@ -687,6 +687,11 @@ try:
     wish_list['Forward P/E'] = pe_forward
     wish_list['Yield'] = div_yields
 
+    # ---> NEW FIX: Force columns to numeric to prevent styling crashes <---
+    num_cols = ['Actual Price', 'Desired Price', '% Diff', 'WS Target', '52W Low', '52W High', 'Trailing P/E', 'Forward P/E', 'Yield']
+    for col in num_cols:
+        wish_list[col] = pd.to_numeric(wish_list[col], errors='coerce')
+
     wish_list = wish_list.sort_values(by='% Diff', ascending=True)
     
     def style_shopping_list(row):
@@ -965,3 +970,4 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
