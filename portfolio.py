@@ -445,14 +445,15 @@ if not df.empty:
     # --- AGGREGATE SATELLITES ROW ---
    
 if not df_sat.empty:
-    # 1. Sum up the total market value of all satellite holdings
+    # <-- Notice the 4 spaces before sat_val
     sat_val = df_sat['Market_Value_AUD'].sum()
     
-    # 2. Calculate weighted averages for the prices based on market value
     if sat_val > 0:
+        # <-- 8 spaces here (inside the second if)
         weighted_avg_price = (df_sat['Avg_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
         weighted_current_price = (df_sat['Current_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
     else:
+        # <-- 8 spaces here
         weighted_avg_price = 0
         weighted_current_price = 0
 
@@ -962,6 +963,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
