@@ -626,6 +626,7 @@ if not df.empty:
         st.caption("Includes fully sold positions.")
 
 # ---> SHOPPING LIST <---
+# ---> SHOPPING LIST <---
 st.subheader("🛒 Shopping List")
 try:
     sheet_url = "https://docs.google.com/spreadsheets/d/1dBmx0FsTUKh0tOOFfLYnhq5iwlZYyZIJYZaxZj62orQ/export?format=csv"
@@ -650,13 +651,7 @@ try:
         
     for ticker in wish_list['Ticker']:
         # 1. Set default safe values for this specific ticker
-        p_actual = None
-        p_low = None
-        p_high = None
-        p_target = None
-        p_pe_t = None
-        p_pe_f = None
-        p_yield = None
+        p_actual, p_low, p_high, p_target, p_pe_t, p_pe_f, p_yield = None, None, None, None, None, None, None
 
         try:
             stock = yf.Ticker(ticker)
@@ -692,24 +687,16 @@ try:
         pe_trailing.append(p_pe_t)
         pe_forward.append(p_pe_f)
         div_yields.append(p_yield)
-
-        except Exception as e:
-            actual_prices.append(None)
-            ws_targets.append(None)
-            year_lows.append(None)
-            year_highs.append(None)
-            pe_trailing.append(None)
-            pe_forward.append(None)
-            div_yields.append(None)
             
     wish_list['Actual Price'] = actual_prices
-    wish_list['% Diff'] = (wish_list['Actual Price'] - wish_list['Desired Price']) / wish_list['Desired Price']
     wish_list['WS Target'] = ws_targets
     wish_list['52W Low'] = year_lows
     wish_list['52W High'] = year_highs
     wish_list['Trailing P/E'] = pe_trailing
     wish_list['Forward P/E'] = pe_forward
     wish_list['Yield'] = div_yields
+
+    wish_list['% Diff'] = (wish_list['Actual Price'] - wish_list['Desired Price']) / wish_list['Desired Price']
 
     # ---> NEW FIX: Force columns to numeric to prevent styling crashes <---
     num_cols = ['Actual Price', 'Desired Price', '% Diff', 'WS Target', '52W Low', '52W High', 'Trailing P/E', 'Forward P/E', 'Yield']
@@ -994,5 +981,6 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
