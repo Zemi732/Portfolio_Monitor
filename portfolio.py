@@ -626,7 +626,6 @@ if not df.empty:
         st.caption("Includes fully sold positions.")
 
 # ---> SHOPPING LIST <---
-# ---> SHOPPING LIST <---
 st.subheader("🛒 Shopping List")
 try:
     sheet_url = "https://docs.google.com/spreadsheets/d/1dBmx0FsTUKh0tOOFfLYnhq5iwlZYyZIJYZaxZj62orQ/export?format=csv"
@@ -650,7 +649,7 @@ try:
     div_yields = []
         
     for ticker in wish_list['Ticker']:
-        # 1. Route the ticker correctly (just like the main portfolio!)
+        # 1. Route the ticker correctly
         if ticker in TICKER_MAP:
             yf_ticker = TICKER_MAP[ticker]
         elif 'US_TICKERS' in globals() and ticker in US_TICKERS:
@@ -658,23 +657,23 @@ try:
         else:
             yf_ticker = f"{ticker}.AX"
 
-        # 2. Set default safe values for this specific ticker
+        # 2. Set default safe values
         p_actual, p_low, p_high, p_target, p_pe_t, p_pe_f, p_yield = None, None, None, None, None, None, None
 
         try:
-            # ---> Using the correctly routed yf_ticker here! <---
             stock = yf.Ticker(yf_ticker)
             
-            try: p_actual = stock.fast_info.get('last_price')
+            # ---> FIX: Use bracket notation instead of .get() for fast_info! <---
+            try: p_actual = float(stock.fast_info['last_price'])
             except: pass
             
-            try: p_low = stock.fast_info.get('year_low')
+            try: p_low = float(stock.fast_info['year_low'])
             except: pass
             
-            try: p_high = stock.fast_info.get('year_high')
+            try: p_high = float(stock.fast_info['year_high'])
             except: pass
             
-            # The .info dictionary is the most likely to crash, so we isolate it
+            # The .info object IS a standard dictionary, so .get() works perfectly here
             try:
                 info = stock.info
                 p_target = info.get('targetMeanPrice')
@@ -686,9 +685,9 @@ try:
             except: pass
 
         except Exception:
-            pass # If the whole ticker fails, our defaults are already None
+            pass 
 
-        # 3. Append exactly ONCE per ticker to keep perfectly aligned
+        # 3. Append exactly ONCE per ticker
         actual_prices.append(p_actual)
         year_lows.append(p_low)
         year_highs.append(p_high)
@@ -990,6 +989,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
