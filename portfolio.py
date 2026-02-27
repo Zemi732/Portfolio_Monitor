@@ -443,19 +443,35 @@ if not df.empty:
     df['Deficit'] = df['Target_Value'] - df['Market_Value_AUD']
 
     # --- AGGREGATE SATELLITES ROW ---
-    df_sat = df[df['Category'] == 'Satellite'].copy()
-    if not df_sat.empty: 
-        df_sat = df_sat.sort_values('Rise', ascending=False)
-        df_sat['Distribution'] = (df_sat['Market_Value_AUD'] / total_value_aud) * 100
-        df_sat['Profit'] = df_sat['Gain_Loss_Native']
-        df_sat['Realized P/L'] = df_sat['Realized_PL_Active']
-        df_sat = df_sat.rename(columns={
-            'Rise': 'P/L %', 
-            'Profit': 'P/L (AUD)', 
-            'Current_Price': 'Price',    # Removed (USD)
-            'Avg_Price': 'Avg Price'     # Removed (USD)
-        })
+   
+    if not df_sat.empty:
+    # 1. Sum up the total market value of all satellite holdings
+    sat_val = df_sat['Market_Value_AUD'].sum()
+    
+    # 2. Calculate weighted averages for the prices based on market value
+    if sat_val > 0:
+        weighted_avg_price = (df_sat['Avg_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
+        weighted_current_price = (df_sat['Current_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
+    else:
+        weighted_avg_price = 0
+        weighted_current_price = 0
 
+    # 3. Build the aggregated row dictionary
+    sat_row = {
+        'Ticker': 'Satellites',
+        'Market_Value_AUD': sat_val,
+        'Avg_Price': weighted_avg_price,
+        'Current_Price': weighted_current_price,
+        
+        # Pulling in the Deficit and your newly updated P/L columns
+        'Deficit': df_sat['Deficit'].sum() if 'Deficit' in df_sat.columns else 0,
+        'Realized_PL': df_sat['Realized_PL'].sum() if 'Realized_PL' in df_sat.columns else 0,
+        'P/L': df_sat['P/L'].sum() if 'P/L' in df_sat.columns else 0
+    }
+
+    sat_df_to_append = pd.DataFrame([sat_row])
+    df_core = pd.concat([df_core, sat_df_to_append], ignore_index=True)
+    
     # --- PORTFOLIO HEADER METRICS ---
     total_profit_aud = df['Gain_Loss_Native'].sum()
     total_cost_aud = total_value_aud - total_profit_aud
@@ -522,8 +538,8 @@ if not df.empty:
 
     st.subheader("🛰️ Satellite Fund Composition")
     if not df_sat.empty:
-        cols_sat = ['Ticker', 'Shares', 'Avg Price (USD)', 'Price (USD)', 'P/L %', 'P/L (AUD)', 'Realized P/L', 'FX Tilt', 'Next Earnings', 'Market_Value_AUD', 'Distribution']
-        st.dataframe(apply_portfolio_styling(df_sat[cols_sat], 'Price (USD)'))
+        cols_sat = ['Ticker', 'Shares', 'Avg Price', 'Price', 'P/L %', 'P/L (AUD)', 'Realized P/L', 'FX Tilt', 'Next Earnings', 'Market_Value_AUD', 'Distribution']
+        st.dataframe(apply_portfolio_styling(df_sat[cols_sat], 'Price'))
 
     st.subheader("🦅 US Market")
     if not df_us.empty:
@@ -946,6 +962,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
