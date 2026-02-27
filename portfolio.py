@@ -510,8 +510,8 @@ if not df.empty:
         df_sat = df_sat.rename(columns={
             'Rise': 'P/L %', 
             'Profit': 'P/L (AUD)', 
-            'Current_Price': 'Price (USD)',
-            'Avg_Price': 'Avg Price (USD)'
+            'Current_Price': 'Price',
+            'Avg_Price': 'Avg Price'
         })
 
     # --- TABLE DISPLAY ---
@@ -946,6 +946,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
