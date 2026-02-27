@@ -649,45 +649,55 @@ try:
     div_yields = []
         
     for ticker in wish_list['Ticker']:
-        # 1. Route the ticker correctly
-        if ticker in TICKER_MAP:
-            yf_ticker = TICKER_MAP[ticker]
-        elif 'US_TICKERS' in globals() and ticker in US_TICKERS:
-            yf_ticker = ticker
+        ticker_clean = str(ticker).strip().upper()
+        
+        # 1. Smart Ticker Routing
+        if ticker_clean in TICKER_MAP:
+            candidates = [TICKER_MAP[ticker_clean]]
+        elif '.' in ticker_clean:
+            # If you already typed .AX or .L in the Google Sheet, use it exactly as is
+            candidates = [ticker_clean]
+        elif 'US_TICKERS' in globals() and ticker_clean in US_TICKERS:
+            candidates = [ticker_clean]
         else:
-            yf_ticker = f"{ticker}.AX"
+            # For new, unknown stocks, try the Australian version first, then the US/Global version
+            candidates = [f"{ticker_clean}.AX", ticker_clean]
 
         # 2. Set default safe values
         p_actual, p_low, p_high, p_target, p_pe_t, p_pe_f, p_yield = None, None, None, None, None, None, None
 
-        try:
-            stock = yf.Ticker(yf_ticker)
-            
-            # ---> FIX: Use bracket notation instead of .get() for fast_info! <---
-            try: p_actual = float(stock.fast_info['last_price'])
-            except: pass
-            
-            try: p_low = float(stock.fast_info['year_low'])
-            except: pass
-            
-            try: p_high = float(stock.fast_info['year_high'])
-            except: pass
-            
-            # The .info object IS a standard dictionary, so .get() works perfectly here
+        # 3. Test the candidates until Yahoo Finance accepts one
+        for yf_ticker in candidates:
             try:
-                info = stock.info
-                p_target = info.get('targetMeanPrice')
-                p_pe_t = info.get('trailingPE')
-                p_pe_f = info.get('forwardPE')
-                raw_yield = info.get('dividendYield')
-                if raw_yield: 
-                    p_yield = raw_yield * 100
-            except: pass
+                stock = yf.Ticker(yf_ticker)
+                
+                # The ultimate test: if this line succeeds, the ticker is valid!
+                p_actual = float(stock.fast_info['last_price'])
+                
+                try: p_low = float(stock.fast_info['year_low'])
+                except: pass
+                
+                try: p_high = float(stock.fast_info['year_high'])
+                except: pass
+                
+                try:
+                    info = stock.info
+                    p_target = info.get('targetMeanPrice')
+                    p_pe_t = info.get('trailingPE')
+                    p_pe_f = info.get('forwardPE')
+                    raw_yield = info.get('dividendYield')
+                    if raw_yield: 
+                        p_yield = raw_yield * 100
+                except: pass
+                
+                # It worked! Break the loop so we don't overwrite good data
+                break 
+                
+            except Exception:
+                # That candidate failed, loop around and try the next guess
+                continue 
 
-        except Exception:
-            pass 
-
-        # 3. Append exactly ONCE per ticker
+        # 4. Append exactly ONCE per ticker
         actual_prices.append(p_actual)
         year_lows.append(p_low)
         year_highs.append(p_high)
@@ -989,6 +999,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
