@@ -444,7 +444,7 @@ if not df.empty:
 
     # --- AGGREGATE SATELLITES ROW ---
    
-    if not df_sat.empty:
+if not df_sat.empty:
     # 1. Sum up the total market value of all satellite holdings
     sat_val = df_sat['Market_Value_AUD'].sum()
     
@@ -962,6 +962,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
