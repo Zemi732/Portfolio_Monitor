@@ -649,25 +649,49 @@ try:
     div_yields = []
         
     for ticker in wish_list['Ticker']:
+        # 1. Set default safe values for this specific ticker
+        p_actual = None
+        p_low = None
+        p_high = None
+        p_target = None
+        p_pe_t = None
+        p_pe_f = None
+        p_yield = None
+
         try:
             stock = yf.Ticker(ticker)
             
-            try: actual_prices.append(stock.fast_info['last_price'])
-            except: actual_prices.append(None)
+            try: p_actual = stock.fast_info.get('last_price')
+            except: pass
             
-            try: year_lows.append(stock.fast_info['year_low'])
-            except: year_lows.append(None)
+            try: p_low = stock.fast_info.get('year_low')
+            except: pass
             
-            try: year_highs.append(stock.fast_info['year_high'])
-            except: year_highs.append(None)
+            try: p_high = stock.fast_info.get('year_high')
+            except: pass
             
-            info = stock.info
-            ws_targets.append(info.get('targetMeanPrice', None))
-            pe_trailing.append(info.get('trailingPE', None))
-            pe_forward.append(info.get('forwardPE', None))
-            
-            raw_yield = info.get('dividendYield')
-            div_yields.append(raw_yield * 100 if raw_yield else None)
+            # The .info dictionary is the most likely to crash, so we isolate it
+            try:
+                info = stock.info
+                p_target = info.get('targetMeanPrice')
+                p_pe_t = info.get('trailingPE')
+                p_pe_f = info.get('forwardPE')
+                raw_yield = info.get('dividendYield')
+                if raw_yield: 
+                    p_yield = raw_yield * 100
+            except: pass
+
+        except Exception:
+            pass # If the whole ticker fails, our defaults are already None
+
+        # 2. Append exactly ONCE per ticker to keep perfectly aligned with the DataFrame
+        actual_prices.append(p_actual)
+        year_lows.append(p_low)
+        year_highs.append(p_high)
+        ws_targets.append(p_target)
+        pe_trailing.append(p_pe_t)
+        pe_forward.append(p_pe_f)
+        div_yields.append(p_yield)
 
         except Exception as e:
             actual_prices.append(None)
@@ -970,4 +994,5 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
