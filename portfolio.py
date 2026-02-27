@@ -442,37 +442,6 @@ if not df.empty:
     df['Target_Value'] = total_value_aud * (df['Target_%'] / 100)
     df['Deficit'] = df['Target_Value'] - df['Market_Value_AUD']
 
-    # --- AGGREGATE SATELLITES ROW ---
-   
-if not df_sat.empty:
-    # <-- Notice the 4 spaces before sat_val
-    sat_val = df_sat['Market_Value_AUD'].sum()
-    
-    if sat_val > 0:
-        # <-- 8 spaces here (inside the second if)
-        weighted_avg_price = (df_sat['Avg_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
-        weighted_current_price = (df_sat['Current_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
-    else:
-        # <-- 8 spaces here
-        weighted_avg_price = 0
-        weighted_current_price = 0
-
-    # 3. Build the aggregated row dictionary
-    sat_row = {
-        'Ticker': 'Satellites',
-        'Market_Value_AUD': sat_val,
-        'Avg_Price': weighted_avg_price,
-        'Current_Price': weighted_current_price,
-        
-        # Pulling in the Deficit and your newly updated P/L columns
-        'Deficit': df_sat['Deficit'].sum() if 'Deficit' in df_sat.columns else 0,
-        'Realized_PL': df_sat['Realized_PL'].sum() if 'Realized_PL' in df_sat.columns else 0,
-        'P/L': df_sat['P/L'].sum() if 'P/L' in df_sat.columns else 0
-    }
-
-    sat_df_to_append = pd.DataFrame([sat_row])
-    df_core = pd.concat([df_core, sat_df_to_append], ignore_index=True)
-    
     # --- PORTFOLIO HEADER METRICS ---
     total_profit_aud = df['Gain_Loss_Native'].sum()
     total_cost_aud = total_value_aud - total_profit_aud
@@ -490,12 +459,44 @@ if not df_sat.empty:
     
     # --- TABLE SPLITTING & RENAMING ---
     df_core = df[df['Category'] == 'Core'].copy()
+    df_us = df[df['Category'] == 'US Market'].copy()
+    df_sat = df[df['Category'] == 'Satellite'].copy()
+
+    # --- AGGREGATE SATELLITES ROW ---
+    sat_row = None
+    if not df_sat.empty:
+        sat_val = df_sat['Market_Value_AUD'].sum()
+        
+        if sat_val > 0:
+            weighted_avg_price = (df_sat['Avg_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
+            weighted_current_price = (df_sat['Current_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
+            sat_rise = ((weighted_current_price - weighted_avg_price) / weighted_avg_price) * 100 if weighted_avg_price > 0 else 0
+        else:
+            weighted_avg_price = 0
+            weighted_current_price = 0
+            sat_rise = 0
+
+        # Build the dictionary to perfectly match the pre-renamed columns
+        sat_row = {
+            'Ticker': 'Satellites',
+            'Market_Value_AUD': sat_val,
+            'Avg_Price': weighted_avg_price,
+            'Current_Price': weighted_current_price,
+            'Rise': sat_rise,
+            'Deficit': df_sat['Deficit'].sum() if 'Deficit' in df_sat.columns else 0,
+            'Gain_Loss_Native': df_sat['Gain_Loss_Native'].sum() if 'Gain_Loss_Native' in df_sat.columns else 0,
+            'Realized_PL_Active': df_sat['Realized_PL_Active'].sum() if 'Realized_PL_Active' in df_sat.columns else 0
+        }
+
+    # Now handle Core Table
     if not df_core.empty:
         if 'CORE_ORDER' in globals():
             df_core['Ticker'] = pd.Categorical(df_core['Ticker'], categories=CORE_ORDER, ordered=True)
         df_core = df_core.sort_values('Ticker')
-        if 'agg_row' in globals() and agg_row: 
-            df_core = pd.concat([df_core, pd.DataFrame([agg_row])], ignore_index=True)
+        
+        # Append Satellite row here, BEFORE columns are renamed!
+        if sat_row is not None: 
+            df_core = pd.concat([df_core, pd.DataFrame([sat_row])], ignore_index=True)
             
         df_core['Distribution'] = (df_core['Market_Value_AUD'] / total_value_aud) * 100
         df_core['Profit'] = df_core['Gain_Loss_Native']
@@ -506,7 +507,7 @@ if not df_sat.empty:
             'Current_Price': 'ASX Price'
         })
 
-    df_us = df[df['Category'] == 'US Market'].copy()
+    # Now handle US Table
     if not df_us.empty: 
         df_us['Distribution'] = (df_us['Market_Value_AUD'] / total_value_aud) * 100
         df_us['Profit'] = df_us['Gain_Loss_Native']
@@ -518,7 +519,7 @@ if not df_sat.empty:
             'Avg_Price': 'Avg Price (USD)'
         })
 
-    df_sat = df[df['Category'] == 'Satellite'].copy()
+    # Now handle Satellite Table
     if not df_sat.empty: 
         df_sat = df_sat.sort_values('Rise', ascending=False)
         df_sat['Distribution'] = (df_sat['Market_Value_AUD'] / total_value_aud) * 100
@@ -540,7 +541,8 @@ if not df_sat.empty:
     st.subheader("🛰️ Satellite Fund Composition")
     if not df_sat.empty:
         cols_sat = ['Ticker', 'Shares', 'Avg Price', 'Price', 'P/L %', 'P/L (AUD)', 'Realized P/L', 'FX Tilt', 'Next Earnings', 'Market_Value_AUD', 'Distribution']
-        st.dataframe(apply_portfolio_styling(df_sat[cols_sat], 'Price'))
+        # Adding the 3rd argument 'Avg Price' cleanly fixes the styling KeyError!
+        st.dataframe(apply_portfolio_styling(df_sat[cols_sat], 'Price', 'Avg Price'))
 
     st.subheader("🦅 US Market")
     if not df_us.empty:
@@ -645,7 +647,7 @@ try:
     pe_trailing = []
     pe_forward = []
     div_yields = []
-       
+        
     for ticker in wish_list['Ticker']:
         try:
             stock = yf.Ticker(ticker)
@@ -963,17 +965,3 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
