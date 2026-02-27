@@ -650,11 +650,20 @@ try:
     div_yields = []
         
     for ticker in wish_list['Ticker']:
-        # 1. Set default safe values for this specific ticker
+        # 1. Route the ticker correctly (just like the main portfolio!)
+        if ticker in TICKER_MAP:
+            yf_ticker = TICKER_MAP[ticker]
+        elif 'US_TICKERS' in globals() and ticker in US_TICKERS:
+            yf_ticker = ticker
+        else:
+            yf_ticker = f"{ticker}.AX"
+
+        # 2. Set default safe values for this specific ticker
         p_actual, p_low, p_high, p_target, p_pe_t, p_pe_f, p_yield = None, None, None, None, None, None, None
 
         try:
-            stock = yf.Ticker(ticker)
+            # ---> Using the correctly routed yf_ticker here! <---
+            stock = yf.Ticker(yf_ticker)
             
             try: p_actual = stock.fast_info.get('last_price')
             except: pass
@@ -679,7 +688,7 @@ try:
         except Exception:
             pass # If the whole ticker fails, our defaults are already None
 
-        # 2. Append exactly ONCE per ticker to keep perfectly aligned with the DataFrame
+        # 3. Append exactly ONCE per ticker to keep perfectly aligned
         actual_prices.append(p_actual)
         year_lows.append(p_low)
         year_highs.append(p_high)
@@ -981,6 +990,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
