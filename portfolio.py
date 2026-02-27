@@ -680,15 +680,25 @@ try:
                 try: p_high = float(stock.fast_info['year_high'])
                 except: pass
                 
+                # The .info object IS a standard dictionary, but can sometimes be empty or None
                 try:
                     info = stock.info
-                    p_target = info.get('targetMeanPrice')
-                    p_pe_t = info.get('trailingPE')
-                    p_pe_f = info.get('forwardPE')
-                    raw_yield = info.get('dividendYield')
-                    if raw_yield: 
-                        p_yield = raw_yield * 100
-                except: pass
+                    
+                    # Force it to be a dictionary to prevent silent crashes
+                    if isinstance(info, dict):
+                        p_target = info.get('targetMeanPrice')
+                        p_pe_t = info.get('trailingPE')
+                        p_pe_f = info.get('forwardPE')
+                        
+                        # Yahoo Finance sometimes hides yield under a different key
+                        raw_yield = info.get('dividendYield')
+                        if raw_yield is None:
+                            raw_yield = info.get('trailingAnnualDividendYield')
+                            
+                        if raw_yield: 
+                            p_yield = raw_yield * 100
+                except: 
+                    pass
                 
                 # It worked! Break the loop so we don't overwrite good data
                 break 
@@ -999,6 +1009,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
