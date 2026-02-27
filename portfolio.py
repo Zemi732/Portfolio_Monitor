@@ -5,6 +5,7 @@ import plotly.express as px
 from decimal import Decimal, ROUND_HALF_UP
 import datetime
 from datetime import timedelta
+import pytz
 
 st.set_page_config(layout="wide", page_title="Portfolio Dashboard")
 
@@ -89,10 +90,23 @@ with st.sidebar:
         st.rerun()
     st.markdown("---")
 
+
 # ==========================================
 # 2. MAIN PAGE: DATA LOADING & LOGIC
 # ==========================================
-st.title("🇦🇺 ASX & 🇺🇸 US Portfolio Monitor")
+c_title, c_tk, c_ld, c_ny = st.columns([5, 1, 1, 1])
+
+with c_title:
+    st.title("🇦🇺 ASX & 🇺🇸 US Portfolio Monitor")
+with c_tk:
+    st.caption("🗼 Tokyo")
+    st.markdown(f"**{datetime.datetime.now(pytz.timezone('Asia/Tokyo')).strftime('%H:%M')}**")
+with c_ld:
+    st.caption("🌉 London")
+    st.markdown(f"**{datetime.datetime.now(pytz.timezone('Europe/London')).strftime('%H:%M')}**")
+with c_ny:
+    st.caption("🗽 New York")
+    st.markdown(f"**{datetime.datetime.now(pytz.timezone('America/New_York')).strftime('%H:%M')}**")
 
 CORE_ORDER = ['VUAA', 'XUSE', 'EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML']
 CORE_TICKERS = ['VUAA', 'XUSE', 'EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML', 'IWDA']
@@ -430,22 +444,17 @@ if not df.empty:
 
     # --- AGGREGATE SATELLITES ROW ---
     df_sat = df[df['Category'] == 'Satellite'].copy()
-    agg_row = None
-    if not df_sat.empty:
-        sat_val = df_sat['Market_Value_AUD'].sum()
-        if sat_val > 0:
-            agg_row = {
-                'Ticker': 'Satellites', 'Shares': df_sat['Shares'].mean(),
-                'Avg_Price': (df_sat['Market_Value_AUD']*df_sat['Avg_Price']).sum()/sat_val,
-                'Current_Price': (df_sat['Market_Value_AUD']*df_sat['Current_Price']).sum()/sat_val,
-                'Rise': (df_sat['Market_Value_AUD']*df_sat['Rise']).sum()/sat_val,
-                'Market_Value_AUD': sat_val, 'Target_%': sat_target_total, 
-                'Deficit': (total_value_aud*sat_target_total/100) - sat_val,
-                'Profit': df_sat['Gain_Loss_Native'].sum(), 
-                'Realized_PL_Active': df_sat['Realized_PL_Active'].sum(),
-                'FX Tilt': 'Neutral',
-                'Next Earnings': None 
-            }
+    if not df_sat.empty: 
+        df_sat = df_sat.sort_values('Rise', ascending=False)
+        df_sat['Distribution'] = (df_sat['Market_Value_AUD'] / total_value_aud) * 100
+        df_sat['Profit'] = df_sat['Gain_Loss_Native']
+        df_sat['Realized P/L'] = df_sat['Realized_PL_Active']
+        df_sat = df_sat.rename(columns={
+            'Rise': 'P/L %', 
+            'Profit': 'P/L (AUD)', 
+            'Current_Price': 'Price',    # Removed (USD)
+            'Avg_Price': 'Avg Price'     # Removed (USD)
+        })
 
     # --- PORTFOLIO HEADER METRICS ---
     total_profit_aud = df['Gain_Loss_Native'].sum()
@@ -937,6 +946,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
