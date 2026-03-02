@@ -668,20 +668,41 @@ try:
         p_peg, p_eps_t, p_rev_growth, p_roe = None, None, None, None
 
         # Try to fetch the main stock object
+        # 2. Start the loop
+    for ticker in wish_list['Ticker']:
+        ticker_clean = str(ticker).strip().upper()
+        
+        # --- SMARTER ROUTING ---
+        if ticker_clean in TICKER_MAP:
+            yf_ticker = TICKER_MAP[ticker_clean]
+        elif 'US_TICKERS' in globals() and ticker_clean in US_TICKERS:
+            yf_ticker = ticker_clean
+        elif '.' in ticker_clean:
+            # If it already has .AX or another suffix in the Google Sheet, leave it alone!
+            yf_ticker = ticker_clean
+        else:
+            # If it's just "BHP", add the .AX
+            yf_ticker = f"{ticker_clean}.AX"
+
+        # Set safe default values
+        p_actual, p_low, p_high, p_target = None, None, None, None
+        p_pe_t, p_pe_f, p_yield = None, None, None
+        p_peg, p_eps_t, p_rev_growth, p_roe = None, None, None, None
+
         try:
             stock = yf.Ticker(yf_ticker)
             
-            # Fetch fast_info (Prices)
-            try: p_actual = stock.fast_info.get('last_price')
+            # --- FIXED: Use BRACKETS for fast_info! ---
+            try: p_actual = float(stock.fast_info['last_price'])
             except: pass
             
-            try: p_low = stock.fast_info.get('year_low')
+            try: p_low = float(stock.fast_info['year_low'])
             except: pass
             
-            try: p_high = stock.fast_info.get('year_high')
+            try: p_high = float(stock.fast_info['year_high'])
             except: pass
             
-            # Fetch deeper fundamental info
+            # Use .get() for the fundamental info dictionary
             try:
                 info = stock.info
                 p_target = info.get('targetMeanPrice')
@@ -698,13 +719,13 @@ try:
                 
                 raw_roe = info.get('returnOnEquity')
                 p_roe = raw_roe * 100 if raw_roe else None
-            except Exception:
-                pass # Info dict failed, but we keep our safe None defaults
+            except: 
+                pass # Info dict failed, keep safe None defaults
                 
-        except Exception:
+        except:
             pass # The whole ticker failed, keep safe None defaults
 
-        # 3. Append to lists exactly ONCE per ticker to keep the dataframe aligned
+        # 3. Append to lists exactly ONCE per ticker
         actual_prices.append(p_actual)
         year_lows.append(p_low)
         year_highs.append(p_high)
@@ -1014,6 +1035,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
