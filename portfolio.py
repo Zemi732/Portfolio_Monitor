@@ -705,14 +705,12 @@ try:
                 raw_roe = info.get('returnOnEquity')
                 p_roe = raw_roe * 100 if raw_roe else None
                 
-            except: pass
-                
                 # It worked! Break the loop so we don't overwrite good data
                 break 
                 
             except Exception:
                 # That candidate failed, loop around and try the next guess
-                continue 
+                continue
 
         # 4. Append exactly ONCE per ticker
         actual_prices.append(p_actual)
@@ -1024,6 +1022,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
