@@ -648,51 +648,45 @@ try:
     pe_forward = []
     div_yields = []
     peg_ratios = []
-    revenue_growths = []
     eps_trailing = []
+    revenue_growths = []
     return_on_equities = []
-        
+
+    # 2. Start the loop
     for ticker in wish_list['Ticker']:
-        ticker_clean = str(ticker).strip().upper()
-        
-        # 1. Smart Ticker Routing
-        if ticker_clean in TICKER_MAP:
-            candidates = [TICKER_MAP[ticker_clean]]
-        elif '.' in ticker_clean:
-            # If you already typed .AX or .L in the Google Sheet, use it exactly as is
-            candidates = [ticker_clean]
-        elif 'US_TICKERS' in globals() and ticker_clean in US_TICKERS:
-            candidates = [ticker_clean]
+        # Route the ticker correctly
+        if ticker in TICKER_MAP:
+            yf_ticker = TICKER_MAP[ticker]
+        elif 'US_TICKERS' in globals() and ticker in US_TICKERS:
+            yf_ticker = ticker
         else:
-            # For new, unknown stocks, try the Australian version first, then the US/Global version
-            candidates = [f"{ticker_clean}.AX", ticker_clean]
+            yf_ticker = f"{ticker}.AX"
 
-        # 2. Set default safe values
-        p_actual, p_low, p_high, p_target, p_pe_t, p_pe_f, p_yield = None, None, None, None, None, None, None
+        # Set safe default values for this loop iteration
+        p_actual, p_low, p_high, p_target = None, None, None, None
+        p_pe_t, p_pe_f, p_yield = None, None, None
+        p_peg, p_eps_t, p_rev_growth, p_roe = None, None, None, None
 
-        # 3. Test the candidates until Yahoo Finance accepts one
-        for yf_ticker in candidates:
-            try:
-                stock = yf.Ticker(yf_ticker)
-                
-                # The ultimate test: if this line succeeds, the ticker is valid!
-                p_actual = float(stock.fast_info['last_price'])
-                
-                try: p_low = float(stock.fast_info['year_low'])
-                except: pass
-                
-                try: p_high = float(stock.fast_info['year_high'])
-                except: pass
-                
-                # The .info object IS a standard dictionary, but can sometimes be empty or None
-                # The .info dictionary is the most likely to crash, so we isolate it
+        # Try to fetch the main stock object
+        try:
+            stock = yf.Ticker(yf_ticker)
+            
+            # Fetch fast_info (Prices)
+            try: p_actual = stock.fast_info.get('last_price')
+            except: pass
+            
+            try: p_low = stock.fast_info.get('year_low')
+            except: pass
+            
+            try: p_high = stock.fast_info.get('year_high')
+            except: pass
+            
+            # Fetch deeper fundamental info
             try:
                 info = stock.info
                 p_target = info.get('targetMeanPrice')
                 p_pe_t = info.get('trailingPE')
                 p_pe_f = info.get('forwardPE')
-                
-                # --- NEW DATA EXTRACTION ---
                 p_peg = info.get('pegRatio')
                 p_eps_t = info.get('trailingEps')
                 
@@ -704,15 +698,13 @@ try:
                 
                 raw_roe = info.get('returnOnEquity')
                 p_roe = raw_roe * 100 if raw_roe else None
-                
-                # It worked! Break the loop so we don't overwrite good data
-                break 
-                
             except Exception:
-                # That candidate failed, loop around and try the next guess
-                continue
+                pass # Info dict failed, but we keep our safe None defaults
+                
+        except Exception:
+            pass # The whole ticker failed, keep safe None defaults
 
-        # 4. Append exactly ONCE per ticker
+        # 3. Append to lists exactly ONCE per ticker to keep the dataframe aligned
         actual_prices.append(p_actual)
         year_lows.append(p_low)
         year_highs.append(p_high)
@@ -1022,6 +1014,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
