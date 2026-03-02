@@ -647,6 +647,10 @@ try:
     pe_trailing = []
     pe_forward = []
     div_yields = []
+    peg_ratios = []
+    revenue_growths = []
+    eps_trailing = []
+    return_on_equities = []
         
     for ticker in wish_list['Ticker']:
         ticker_clean = str(ticker).strip().upper()
@@ -681,24 +685,27 @@ try:
                 except: pass
                 
                 # The .info object IS a standard dictionary, but can sometimes be empty or None
-                try:
-                    info = stock.info
-                    
-                    # Force it to be a dictionary to prevent silent crashes
-                    if isinstance(info, dict):
-                        p_target = info.get('targetMeanPrice')
-                        p_pe_t = info.get('trailingPE')
-                        p_pe_f = info.get('forwardPE')
-                        
-                        # Yahoo Finance sometimes hides yield under a different key
-                        raw_yield = info.get('dividendYield')
-                        if raw_yield is None:
-                            raw_yield = info.get('trailingAnnualDividendYield')
-                            
-                        if raw_yield: 
-                            p_yield = raw_yield * 100
-                except: 
-                    pass
+                # The .info dictionary is the most likely to crash, so we isolate it
+            try:
+                info = stock.info
+                p_target = info.get('targetMeanPrice')
+                p_pe_t = info.get('trailingPE')
+                p_pe_f = info.get('forwardPE')
+                
+                # --- NEW DATA EXTRACTION ---
+                p_peg = info.get('pegRatio')
+                p_eps_t = info.get('trailingEps')
+                
+                raw_yield = info.get('dividendYield')
+                p_yield = raw_yield * 100 if raw_yield else None
+                
+                raw_rev = info.get('revenueGrowth')
+                p_rev_growth = raw_rev * 100 if raw_rev else None
+                
+                raw_roe = info.get('returnOnEquity')
+                p_roe = raw_roe * 100 if raw_roe else None
+                
+            except: pass
                 
                 # It worked! Break the loop so we don't overwrite good data
                 break 
@@ -715,6 +722,10 @@ try:
         pe_trailing.append(p_pe_t)
         pe_forward.append(p_pe_f)
         div_yields.append(p_yield)
+        peg_ratios.append(p_peg)
+        eps_trailing.append(p_eps_t)
+        revenue_growths.append(p_rev_growth)
+        return_on_equities.append(p_roe)
             
     wish_list['Actual Price'] = actual_prices
     wish_list['WS Target'] = ws_targets
@@ -723,6 +734,10 @@ try:
     wish_list['Trailing P/E'] = pe_trailing
     wish_list['Forward P/E'] = pe_forward
     wish_list['Yield'] = div_yields
+    wish_list['PEG Ratio'] = peg_ratios
+    wish_list['EPS (TTM)'] = eps_trailing
+    wish_list['Rev Growth'] = revenue_growths
+    wish_list['ROE'] = return_on_equities
 
     wish_list['% Diff'] = (wish_list['Actual Price'] - wish_list['Desired Price']) / wish_list['Desired Price']
 
@@ -1009,6 +1024,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
