@@ -654,22 +654,6 @@ try:
 
     # 2. Start the loop
     for ticker in wish_list['Ticker']:
-        # Route the ticker correctly
-        if ticker in TICKER_MAP:
-            yf_ticker = TICKER_MAP[ticker]
-        elif 'US_TICKERS' in globals() and ticker in US_TICKERS:
-            yf_ticker = ticker
-        else:
-            yf_ticker = f"{ticker}.AX"
-
-        # Set safe default values for this loop iteration
-        p_actual, p_low, p_high, p_target = None, None, None, None
-        p_pe_t, p_pe_f, p_yield = None, None, None
-        p_peg, p_eps_t, p_rev_growth, p_roe = None, None, None, None
-
-        # Try to fetch the main stock object
-        # 2. Start the loop
-    for ticker in wish_list['Ticker']:
         ticker_clean = str(ticker).strip().upper()
         
         # --- SMARTER ROUTING ---
@@ -678,10 +662,8 @@ try:
         elif 'US_TICKERS' in globals() and ticker_clean in US_TICKERS:
             yf_ticker = ticker_clean
         elif '.' in ticker_clean:
-            # If it already has .AX or another suffix in the Google Sheet, leave it alone!
             yf_ticker = ticker_clean
         else:
-            # If it's just "BHP", add the .AX
             yf_ticker = f"{ticker_clean}.AX"
 
         # Set safe default values
@@ -692,38 +674,41 @@ try:
         try:
             stock = yf.Ticker(yf_ticker)
             
-            # --- FIXED: Use BRACKETS for fast_info! ---
+            # --- PRICES (Isolated) ---
             try: p_actual = float(stock.fast_info['last_price'])
             except: pass
-            
             try: p_low = float(stock.fast_info['year_low'])
             except: pass
-            
             try: p_high = float(stock.fast_info['year_high'])
             except: pass
             
-            # Use .get() for the fundamental info dictionary
+            # --- FUNDAMENTALS (Safely structured) ---
             try:
                 info = stock.info
-                p_target = info.get('targetMeanPrice')
-                p_pe_t = info.get('trailingPE')
-                p_pe_f = info.get('forwardPE')
-                p_peg = info.get('trailingPegRatio') or info.get('pegRatio')
-                p_eps_t = info.get('trailingEps')
-                
-                raw_yield = info.get('dividendYield')
-                p_yield = raw_yield * 100 if raw_yield else None
-                
-                raw_rev = info.get('revenueGrowth')
-                p_rev_growth = raw_rev * 100 if raw_rev else None
-                
-                raw_roe = info.get('returnOnEquity')
-                p_roe = raw_roe * 100 if raw_roe else None
+                if isinstance(info, dict):
+                    p_target = info.get('targetMeanPrice')
+                    p_pe_t = info.get('trailingPE')
+                    p_pe_f = info.get('forwardPE')
+                    p_eps_t = info.get('trailingEps')
+                    
+                    # Safe PEG fetch
+                    p_peg = info.get('trailingPegRatio')
+                    if p_peg is None:
+                        p_peg = info.get('pegRatio')
+                    
+                    raw_yield = info.get('dividendYield')
+                    p_yield = raw_yield * 100 if raw_yield else None
+                    
+                    raw_rev = info.get('revenueGrowth')
+                    p_rev_growth = raw_rev * 100 if raw_rev else None
+                    
+                    raw_roe = info.get('returnOnEquity')
+                    p_roe = raw_roe * 100 if raw_roe else None
             except: 
-                pass # Info dict failed, keep safe None defaults
+                pass # Info dict failed
                 
         except:
-            pass # The whole ticker failed, keep safe None defaults
+            pass # The whole ticker failed
 
         # 3. Append to lists exactly ONCE per ticker
         actual_prices.append(p_actual)
@@ -1046,6 +1031,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
