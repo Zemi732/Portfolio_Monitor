@@ -708,7 +708,7 @@ try:
                 p_target = info.get('targetMeanPrice')
                 p_pe_t = info.get('trailingPE')
                 p_pe_f = info.get('forwardPE')
-                p_peg = info.get('pegRatio')
+                p_peg = info.get('trailingPegRatio') or info.get('pegRatio')
                 p_eps_t = info.get('trailingEps')
                 
                 raw_yield = info.get('dividendYield')
@@ -764,19 +764,26 @@ try:
         actual = row['Actual Price']
         desired = row['Desired Price']
         
-        if pd.isna(actual) or pd.isna(desired):
-            return styles
+        # 1. Price vs Desired Price Logic
+        if pd.notna(actual) and pd.notna(desired):
+            price_col_idx = row.index.get_loc('Actual Price')
+            diff_col_idx = row.index.get_loc('% Diff')
             
-        price_col_idx = row.index.get_loc('Actual Price')
-        diff_col_idx = row.index.get_loc('% Diff')
-        
-        if actual <= desired: color = '#00FF00'
-        elif actual <= (desired * 1.02): color = '#FFA500'
-        else: color = '#FF0000'
+            if actual <= desired: color = '#00FF00'
+            elif actual <= (desired * 1.02): color = '#FFA500'
+            else: color = '#FF0000'
+                
+            styles[price_col_idx] = f'color: {color}; font-weight: bold;'
+            styles[diff_col_idx] = f'color: {color}; font-weight: bold;'
             
-        styles[price_col_idx] = f'color: {color}; font-weight: bold;'
-        styles[diff_col_idx] = f'color: {color}; font-weight: bold;'
-            
+        # 2. PEG Ratio Undervalued Logic (Green if between 0 and 1.0)
+        if 'PEG Ratio' in row.index:
+            peg_val = row['PEG Ratio']
+            # Make sure it's a valid number and hits our undervalued criteria
+            if pd.notna(peg_val) and isinstance(peg_val, (int, float)) and 0 < peg_val <= 1.0:
+                peg_idx = row.index.get_loc('PEG Ratio')
+                styles[peg_idx] = 'color: #00FF00; font-weight: bold;'
+                
         return styles
 
     styled_wish_list = (
@@ -1039,6 +1046,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
