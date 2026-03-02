@@ -705,7 +705,7 @@ try:
                 raw_roe = info.get('returnOnEquity')
                 p_roe = raw_roe * 100 if raw_roe else None
                 
-            except: pass
+                except: pass
                 
                 # It worked! Break the loop so we don't overwrite good data
                 break 
@@ -1024,6 +1024,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
