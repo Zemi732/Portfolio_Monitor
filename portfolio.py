@@ -791,7 +791,11 @@ try:
             '52W High': '${:.2f}',
             'Trailing P/E': '{:.1f}',
             'Forward P/E': '{:.1f}',
-            'Yield': '{:.2f}%'
+            'Yield': '{:.0f}%',        # Cut to whole number
+            'PEG Ratio': '{:.2f}',
+            'EPS (TTM)': '${:.2f}',    # Two decimal points
+            'Rev Growth': '{:.2f}%',   # Two decimal points
+            'ROE': '{:.2f}%'           # Two decimal points
         }, na_rep="-")
     )
     
@@ -1035,6 +1039,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
