@@ -1004,20 +1004,27 @@ def get_asx_bottom_drifters():
         earnings_dates, pegs, roes, eps_ttm, rev_growths = [], [], [], [], []
         
         for t in bottom_10.index:
+            stock = yf.Ticker(t)
+            
+            # 1. Safely fetch Earnings Date (Isolated)
             try:
-                stock = yf.Ticker(t)
                 cal = stock.calendar
                 if cal is not None and 'Earnings Date' in cal and len(cal['Earnings Date']) > 0:
                     earnings_dates.append(cal['Earnings Date'][0].date())
-                else: earnings_dates.append(None)
-                
+                else: 
+                    earnings_dates.append(None)
+            except:
+                earnings_dates.append(None)
+            
+            # 2. Safely fetch Fundamentals (Isolated)
+            try:
                 info = stock.info
                 pegs.append(info.get('trailingPegRatio') or info.get('pegRatio'))
                 roes.append((info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None)
                 eps_ttm.append(info.get('trailingEps'))
                 rev_growths.append((info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None)
             except:
-                earnings_dates.append(None); pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
+                pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
         
         drifters_df = pd.DataFrame({
             'Ticker': bottom_10.index.str.replace('.AX', '', regex=False),
@@ -1083,6 +1090,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
