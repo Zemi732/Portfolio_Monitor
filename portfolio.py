@@ -842,10 +842,11 @@ except FileNotFoundError:
     st.warning("Could not find 'Wish list.csv'. Please make sure it is saved in the exact same folder as your script.")
 
 # ---> SECTION: ASX 200 BARGAIN SCANNER <---
+# ---> SECTION: ASX 200 BARGAIN SCANNER <---
 st.subheader("📉 ASX 200 Daily Losers (Bargain Scanner)")
 
 @st.cache_data(ttl=3600)
-def get_asx_losers():
+def get_asx_losers_v2(): # <--- Renamed to bust cache
     try:
         import requests
         
@@ -874,9 +875,9 @@ def get_asx_losers():
         
         losers = pct_change.sort_values().head(10)
         
-        # New arrays for fundamentals
         year_lows, year_highs = [], []
         pegs, roes, eps_ttm, rev_growths = [], [], [], []
+        pe_trailing, pe_forward = [], [] # <--- New Lists
         
         for t in losers.index:
             stock = yf.Ticker(t)
@@ -886,20 +887,19 @@ def get_asx_losers():
             try: year_highs.append(stock.fast_info['year_high'])
             except: year_highs.append(None)
             
-            # Fetch fundamentals for highlighting
             try:
                 info = stock.info
-                p_peg = info.get('trailingPegRatio') or info.get('pegRatio')
-                p_roe = (info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None
-                p_eps = info.get('trailingEps')
-                p_rev = (info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None
+                pegs.append(info.get('trailingPegRatio') or info.get('pegRatio'))
+                roes.append((info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None)
+                eps_ttm.append(info.get('trailingEps'))
+                rev_growths.append((info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None)
                 
-                pegs.append(p_peg)
-                roes.append(p_roe)
-                eps_ttm.append(p_eps)
-                rev_growths.append(p_rev)
+                # Fetching P/E Ratios
+                pe_trailing.append(info.get('trailingPE'))
+                pe_forward.append(info.get('forwardPE'))
             except:
                 pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
+                pe_trailing.append(None); pe_forward.append(None)
             
         last_prices = recent_data.iloc[1][losers.index].values
         
@@ -914,6 +914,8 @@ def get_asx_losers():
             'Drop %': losers.values,
             'Last Price': last_prices,
             'Above 52W Low': above_52w_low,
+            'Trailing P/E': pe_trailing, # <--- Added to dataframe
+            'Forward P/E': pe_forward,   # <--- Added to dataframe
             'PEG Ratio': pegs,
             'ROE': roes,
             'EPS': eps_ttm,
@@ -926,7 +928,7 @@ def get_asx_losers():
         return pd.DataFrame()
 
 with st.spinner('Scanning ASX 200 for bargains...'):
-    losers_df = get_asx_losers()
+    losers_df = get_asx_losers_v2()
 
 if not losers_df.empty:
     def style_bargain_scanner(row):
@@ -941,6 +943,15 @@ if not losers_df.empty:
             if pd.notna(above_val) and above_val <= 5.0:
                 styles[row.index.get_loc('Above 52W Low')] = 'color: #00FF00; font-weight: bold;'
                 styles[row.index.get_loc('Last Price')] = 'color: #00FF00; font-weight: bold;'
+
+        # --- NEW: P/E Ratio Highlighting ---
+        if 'Trailing P/E' in row.index and 'Forward P/E' in row.index:
+            t_pe = row['Trailing P/E']
+            f_pe = row['Forward P/E']
+            # If Forward P/E is lower than Trailing P/E (and both are positive)
+            if pd.notna(t_pe) and pd.notna(f_pe) and t_pe > 0 and f_pe > 0 and f_pe < t_pe:
+                styles[row.index.get_loc('Trailing P/E')] = 'color: #00FF00; font-weight: bold;'
+                styles[row.index.get_loc('Forward P/E')] = 'color: #00FF00; font-weight: bold;'
 
         # Fundamental Highlighting
         if 'PEG Ratio' in row.index and pd.notna(row['PEG Ratio']) and 0 < row['PEG Ratio'] <= 1.5:
@@ -961,6 +972,7 @@ if not losers_df.empty:
     styled_losers = (
         losers_df.style.apply(style_bargain_scanner, axis=1).format({
             'Drop %': '{:.2f}%', 'Last Price': '${:.2f}', 'Above 52W Low': '+{:.2f}%',
+            'Trailing P/E': '{:.1f}', 'Forward P/E': '{:.1f}', # <--- Formatted to 1 decimal place
             'PEG Ratio': '{:.2f}', 'ROE': '{:.2f}%', 'EPS': '${:.2f}', 'Rev Growth': '{:.2f}%'
         }, na_rep="-")
     )
@@ -970,10 +982,11 @@ else:
 # ---> END NEW SECTION <---
 
 # ---> SECTION: ASX 200 BOTTOM DRIFTERS <---
+
 st.subheader("⚓ ASX 200 Bottom Drifters (Near 52W Low)")
 
 @st.cache_data(ttl=3600)
-def get_asx_bottom_drifters_v2(): # <--- Renamed to bust the cache!
+def get_asx_bottom_drifters_v3(): # <--- Renamed to bust cache
     try:
         import requests
         import datetime
@@ -1002,12 +1015,11 @@ def get_asx_bottom_drifters_v2(): # <--- Renamed to bust the cache!
         bottom_10 = distance_to_low.sort_values().head(10)
         
         earnings_dates, pegs, roes, eps_ttm, rev_growths = [], [], [], [], []
+        pe_trailing, pe_forward = [], [] # <--- New Lists
         
-        print("\n--- Fetching Bottom Drifters Fundamentals ---")
         for t in bottom_10.index:
             stock = yf.Ticker(t)
             
-            # 1. Safely fetch Earnings Date
             try:
                 cal = stock.calendar
                 if cal is not None and 'Earnings Date' in cal and len(cal['Earnings Date']) > 0:
@@ -1017,25 +1029,27 @@ def get_asx_bottom_drifters_v2(): # <--- Renamed to bust the cache!
             except:
                 earnings_dates.append(None)
             
-            # 2. Safely fetch Fundamentals
             try:
                 info = stock.info
-                # Print to terminal so we know it's not failing silently
-                print(f"Got info for {t} - ROE: {info.get('returnOnEquity')}") 
-                
                 pegs.append(info.get('trailingPegRatio') or info.get('pegRatio'))
                 roes.append((info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None)
                 eps_ttm.append(info.get('trailingEps'))
                 rev_growths.append((info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None)
+                
+                # Fetching P/E Ratios
+                pe_trailing.append(info.get('trailingPE'))
+                pe_forward.append(info.get('forwardPE'))
             except Exception as e:
-                print(f"Failed to get info for {t}: {e}")
                 pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
+                pe_trailing.append(None); pe_forward.append(None)
         
         drifters_df = pd.DataFrame({
             'Ticker': bottom_10.index.str.replace('.AX', '', regex=False),
             'Company': df_asx200.set_index('Code').loc[bottom_10.index.str.replace('.AX', '', regex=False)]['Company'].values,
             'Above 52W Low': bottom_10.values,
             'Last Price': current_prices[bottom_10.index].values,
+            'Trailing P/E': pe_trailing, # <--- Added to dataframe
+            'Forward P/E': pe_forward,   # <--- Added to dataframe
             'PEG Ratio': pegs,
             'ROE': roes,
             'EPS': eps_ttm,
@@ -1049,8 +1063,7 @@ def get_asx_bottom_drifters_v2(): # <--- Renamed to bust the cache!
         return pd.DataFrame()
 
 with st.spinner('Scanning for bottom drifters...'):
-    # <--- Make sure we are calling the new V2 function!
-    drifters_df = get_asx_bottom_drifters_v2() 
+    drifters_df = get_asx_bottom_drifters_v3() 
 
 if not drifters_df.empty:
     import datetime
@@ -1065,6 +1078,14 @@ if not drifters_df.empty:
             if pd.notna(earn_val) and isinstance(earn_val, datetime.date):
                 if 0 <= (earn_val - datetime.date.today()).days <= 7:
                     styles[row.index.get_loc('Next Earnings')] = 'background-color: #c62828; color: white; font-weight: bold;'
+
+        # --- NEW: P/E Ratio Highlighting ---
+        if 'Trailing P/E' in row.index and 'Forward P/E' in row.index:
+            t_pe = row['Trailing P/E']
+            f_pe = row['Forward P/E']
+            if pd.notna(t_pe) and pd.notna(f_pe) and t_pe > 0 and f_pe > 0 and f_pe < t_pe:
+                styles[row.index.get_loc('Trailing P/E')] = 'color: #00FF00; font-weight: bold;'
+                styles[row.index.get_loc('Forward P/E')] = 'color: #00FF00; font-weight: bold;'
 
         # Fundamental Highlighting
         if 'PEG Ratio' in row.index and pd.notna(row['PEG Ratio']) and 0 < row['PEG Ratio'] <= 1.5:
@@ -1085,6 +1106,7 @@ if not drifters_df.empty:
     styled_drifters = (
         drifters_df.style.apply(style_drifters, axis=1).format({
             'Above 52W Low': '+{:.2f}%', 'Last Price': '${:.2f}', 
+            'Trailing P/E': '{:.1f}', 'Forward P/E': '{:.1f}', # <--- Formatted
             'PEG Ratio': '{:.2f}', 'ROE': '{:.2f}%', 'EPS': '${:.2f}', 'Rev Growth': '{:.2f}%'
         }, na_rep="-")
     )
@@ -1096,6 +1118,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
