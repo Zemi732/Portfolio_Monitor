@@ -841,7 +841,7 @@ try:
 except FileNotFoundError:
     st.warning("Could not find 'Wish list.csv'. Please make sure it is saved in the exact same folder as your script.")
 
-# ---> NEW SECTION: ASX 200 BARGAIN SCANNER <---
+# ---> SECTION: ASX 200 BARGAIN SCANNER <---
 st.subheader("📉 ASX 200 Daily Losers (Bargain Scanner)")
 
 @st.cache_data(ttl=3600)
@@ -860,48 +860,53 @@ def get_asx_losers():
                 df_asx200 = table
                 break
                 
-        if df_asx200 is None:
-            st.error("Error: Could not find the ASX 200 constituents table on Wikipedia.")
-            return pd.DataFrame()
+        if df_asx200 is None: return pd.DataFrame()
         
         tickers = df_asx200['Code'].astype(str) + '.AX'
         ticker_list = tickers.tolist()
 
         data = yf.download(ticker_list, period="5d", progress=False)
-        
-        if 'Close' in data.columns:
-            data = data['Close']
-            
-        if data.empty or len(data) < 2:
-            st.error("Error: Not enough recent price data available from Yahoo Finance.")
-            return pd.DataFrame()
+        if 'Close' in data.columns: data = data['Close']
+        if data.empty or len(data) < 2: return pd.DataFrame()
         
         recent_data = data.iloc[-2:] 
         pct_change = ((recent_data.iloc[1] - recent_data.iloc[0]) / recent_data.iloc[0]) * 100
         
-        # Isolate the top 10 losers
         losers = pct_change.sort_values().head(10)
         
-        year_lows = []
-        year_highs = []
+        # New arrays for fundamentals
+        year_lows, year_highs = [], []
+        pegs, roes, eps_ttm, rev_growths = [], [], [], []
+        
         for t in losers.index:
-            stock_info = yf.Ticker(t).fast_info
-            
-            try: year_lows.append(stock_info['year_low'])
+            stock = yf.Ticker(t)
+            try: year_lows.append(stock.fast_info['year_low'])
             except: year_lows.append(None)
                 
-            try: year_highs.append(stock_info['year_high'])
+            try: year_highs.append(stock.fast_info['year_high'])
             except: year_highs.append(None)
+            
+            # Fetch fundamentals for highlighting
+            try:
+                info = stock.info
+                p_peg = info.get('trailingPegRatio') or info.get('pegRatio')
+                p_roe = (info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None
+                p_eps = info.get('trailingEps')
+                p_rev = (info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None
+                
+                pegs.append(p_peg)
+                roes.append(p_roe)
+                eps_ttm.append(p_eps)
+                rev_growths.append(p_rev)
+            except:
+                pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
             
         last_prices = recent_data.iloc[1][losers.index].values
         
-        # Calculate the new "Above 52W Low" metric
         above_52w_low = []
         for lp, yl in zip(last_prices, year_lows):
-            if pd.notna(lp) and pd.notna(yl) and yl > 0:
-                above_52w_low.append(((lp - yl) / yl) * 100)
-            else:
-                above_52w_low.append(None)
+            if pd.notna(lp) and pd.notna(yl) and yl > 0: above_52w_low.append(((lp - yl) / yl) * 100)
+            else: above_52w_low.append(None)
         
         losers_df = pd.DataFrame({
             'Ticker': losers.index.str.replace('.AX', '', regex=False),
@@ -909,8 +914,10 @@ def get_asx_losers():
             'Drop %': losers.values,
             'Last Price': last_prices,
             'Above 52W Low': above_52w_low,
-            '52W Low': year_lows,
-            '52W High': year_highs
+            'PEG Ratio': pegs,
+            'ROE': roes,
+            'EPS': eps_ttm,
+            'Rev Growth': rev_growths
         })
         return losers_df
         
@@ -925,43 +932,44 @@ if not losers_df.empty:
     def style_bargain_scanner(row):
         styles = [''] * len(row)
         
-        # 1. Always make the Drop % red
         if 'Drop %' in row.index:
             drop_idx = row.index.get_loc('Drop %')
             styles[drop_idx] = 'color: #c62828; font-weight: bold;'
-        
-        # 2. The 5% Bargain Zone Logic
+            
         if 'Above 52W Low' in row.index:
             above_val = row['Above 52W Low']
             if pd.notna(above_val) and above_val <= 5.0:
-                price_idx = row.index.get_loc('Last Price')
-                low_idx = row.index.get_loc('52W Low')
-                above_idx = row.index.get_loc('Above 52W Low')
-                
-                highlight = 'color: #00FF00; font-weight: bold;'
-                styles[price_idx] = highlight
-                styles[low_idx] = highlight
-                styles[above_idx] = highlight
+                styles[row.index.get_loc('Above 52W Low')] = 'color: #00FF00; font-weight: bold;'
+                styles[row.index.get_loc('Last Price')] = 'color: #00FF00; font-weight: bold;'
+
+        # Fundamental Highlighting
+        if 'PEG Ratio' in row.index and pd.notna(row['PEG Ratio']) and 0 < row['PEG Ratio'] <= 1.5:
+            styles[row.index.get_loc('PEG Ratio')] = 'color: #00FF00; font-weight: bold;'
+            
+        if 'ROE' in row.index and pd.notna(row['ROE']) and row['ROE'] > 15.0:
+            styles[row.index.get_loc('ROE')] = 'color: #00FF00; font-weight: bold;'
+            
+        if 'Rev Growth' in row.index and pd.notna(row['Rev Growth']) and row['Rev Growth'] > 10.0:
+            styles[row.index.get_loc('Rev Growth')] = 'color: #00FF00; font-weight: bold;'
+            
+        if 'EPS' in row.index and pd.notna(row['EPS']):
+            if row['EPS'] > 0: styles[row.index.get_loc('EPS')] = 'color: #00FF00; font-weight: bold;'
+            else: styles[row.index.get_loc('EPS')] = 'color: #FF0000; font-weight: bold;'
                 
         return styles
 
     styled_losers = (
-        losers_df.style
-        .apply(style_bargain_scanner, axis=1)
-        .format({
-            'Drop %': '{:.2f}%',
-            'Last Price': '${:.2f}',
-            'Above 52W Low': '+{:.2f}%',
-            '52W Low': '${:.2f}',
-            '52W High': '${:.2f}'
+        losers_df.style.apply(style_bargain_scanner, axis=1).format({
+            'Drop %': '{:.2f}%', 'Last Price': '${:.2f}', 'Above 52W Low': '+{:.2f}%',
+            'PEG Ratio': '{:.2f}', 'ROE': '{:.2f}%', 'EPS': '${:.2f}', 'Rev Growth': '{:.2f}%'
         }, na_rep="-")
     )
     st.dataframe(styled_losers, hide_index=True, use_container_width=True)
 else:
-    st.info("Market scanner currently unavailable. Check your connection.")
+    st.info("Market scanner currently unavailable.")
 # ---> END NEW SECTION <---
 
-# ---> NEW SECTION: ASX 200 BOTTOM DRIFTERS <---
+# ---> SECTION: ASX 200 BOTTOM DRIFTERS <---
 st.subheader("⚓ ASX 200 Bottom Drifters (Near 52W Low)")
 
 @st.cache_data(ttl=3600)
@@ -970,7 +978,6 @@ def get_asx_bottom_drifters():
         import requests
         import datetime
         
-        # 1. Grab the ASX 200 list
         url = 'https://en.wikipedia.org/wiki/S%26P/ASX_200'
         header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         req = requests.get(url, headers=header)
@@ -985,47 +992,42 @@ def get_asx_bottom_drifters():
         if df_asx200 is None: return pd.DataFrame()
         
         tickers = df_asx200['Code'].astype(str) + '.AX'
-        ticker_list = tickers.tolist()
-
-        # 2. Bulk download 1 YEAR of data to find the true bottoms
-        data = yf.download(ticker_list, period="1y", progress=False)
-        
+        data = yf.download(tickers.tolist(), period="1y", progress=False)
         if data.empty: return pd.DataFrame()
         
-        closes = data['Close']
-        lows = data['Low']
-        highs = data['High']
+        closes, lows, highs = data['Close'], data['Low'], data['High']
+        current_prices, year_lows, year_highs = closes.iloc[-1], lows.min(), highs.max()
         
-        # 3. Calculate metrics
-        current_prices = closes.iloc[-1]
-        year_lows = lows.min()
-        year_highs = highs.max()
-        
-        # 4. Find how far the current price is above the 52W Low (in percentage)
         distance_to_low = ((current_prices - year_lows) / year_lows) * 100
-        
-        # 5. Grab the 10 stocks closest to 0%
         bottom_10 = distance_to_low.sort_values().head(10)
         
-        # Fetch Next Earnings ONLY for these 10 stocks
-        earnings_dates = []
+        earnings_dates, pegs, roes, eps_ttm, rev_growths = [], [], [], [], []
+        
         for t in bottom_10.index:
             try:
-                cal = yf.Ticker(t).calendar
+                stock = yf.Ticker(t)
+                cal = stock.calendar
                 if cal is not None and 'Earnings Date' in cal and len(cal['Earnings Date']) > 0:
                     earnings_dates.append(cal['Earnings Date'][0].date())
-                else:
-                    earnings_dates.append(None)
+                else: earnings_dates.append(None)
+                
+                info = stock.info
+                pegs.append(info.get('trailingPegRatio') or info.get('pegRatio'))
+                roes.append((info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None)
+                eps_ttm.append(info.get('trailingEps'))
+                rev_growths.append((info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None)
             except:
-                earnings_dates.append(None)
+                earnings_dates.append(None); pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
         
         drifters_df = pd.DataFrame({
             'Ticker': bottom_10.index.str.replace('.AX', '', regex=False),
             'Company': df_asx200.set_index('Code').loc[bottom_10.index.str.replace('.AX', '', regex=False)]['Company'].values,
             'Above 52W Low': bottom_10.values,
             'Last Price': current_prices[bottom_10.index].values,
-            '52W Low': year_lows[bottom_10.index].values,
-            '52W High': year_highs[bottom_10.index].values,
+            'PEG Ratio': pegs,
+            'ROE': roes,
+            'EPS': eps_ttm,
+            'Rev Growth': rev_growths,
             'Next Earnings': earnings_dates
         })
         return drifters_df
@@ -1042,30 +1044,35 @@ if not drifters_df.empty:
     def style_drifters(row):
         styles = [''] * len(row)
         
-        # Highlight the percentage column in bright green
         if 'Above 52W Low' in row.index:
-            dist_idx = row.index.get_loc('Above 52W Low')
-            styles[dist_idx] = 'color: #00FF00; font-weight: bold;'
+            styles[row.index.get_loc('Above 52W Low')] = 'color: #00FF00; font-weight: bold;'
             
-        # Highlight Next Earnings if it's within 7 days
         if 'Next Earnings' in row.index:
             earn_val = row['Next Earnings']
             if pd.notna(earn_val) and isinstance(earn_val, datetime.date):
-                delta = (earn_val - datetime.date.today()).days
-                if 0 <= delta <= 7:
-                    earn_idx = row.index.get_loc('Next Earnings')
-                    styles[earn_idx] = 'background-color: #c62828; color: white; font-weight: bold;'
-        
+                if 0 <= (earn_val - datetime.date.today()).days <= 7:
+                    styles[row.index.get_loc('Next Earnings')] = 'background-color: #c62828; color: white; font-weight: bold;'
+
+        # Fundamental Highlighting
+        if 'PEG Ratio' in row.index and pd.notna(row['PEG Ratio']) and 0 < row['PEG Ratio'] <= 1.5:
+            styles[row.index.get_loc('PEG Ratio')] = 'color: #00FF00; font-weight: bold;'
+            
+        if 'ROE' in row.index and pd.notna(row['ROE']) and row['ROE'] > 15.0:
+            styles[row.index.get_loc('ROE')] = 'color: #00FF00; font-weight: bold;'
+            
+        if 'Rev Growth' in row.index and pd.notna(row['Rev Growth']) and row['Rev Growth'] > 10.0:
+            styles[row.index.get_loc('Rev Growth')] = 'color: #00FF00; font-weight: bold;'
+            
+        if 'EPS' in row.index and pd.notna(row['EPS']):
+            if row['EPS'] > 0: styles[row.index.get_loc('EPS')] = 'color: #00FF00; font-weight: bold;'
+            else: styles[row.index.get_loc('EPS')] = 'color: #FF0000; font-weight: bold;'
+                
         return styles
 
     styled_drifters = (
-        drifters_df.style
-        .apply(style_drifters, axis=1)
-        .format({
-            'Above 52W Low': '+{:.2f}%',
-            'Last Price': '${:.2f}',
-            '52W Low': '${:.2f}',
-            '52W High': '${:.2f}'
+        drifters_df.style.apply(style_drifters, axis=1).format({
+            'Above 52W Low': '+{:.2f}%', 'Last Price': '${:.2f}', 
+            'PEG Ratio': '{:.2f}', 'ROE': '{:.2f}%', 'EPS': '${:.2f}', 'Rev Growth': '{:.2f}%'
         }, na_rep="-")
     )
     st.dataframe(styled_drifters, hide_index=True, use_container_width=True)
@@ -1076,6 +1083,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
