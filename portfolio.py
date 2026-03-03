@@ -761,6 +761,51 @@ try:
             styles[price_col_idx] = f'color: {color}; font-weight: bold;'
             styles[diff_col_idx] = f'color: {color}; font-weight: bold;'
             
+        # 2. PEG Ratio (Value/Growth)
+        if 'PEG Ratio' in row.index:
+            peg_val = row['PEG Ratio']
+            if pd.notna(peg_val) and isinstance(peg_val, (int, float)) and 0 < peg_val <= 1.5:
+                peg_idx = row.index.get_loc('PEG Ratio')
+                styles[peg_idx] = 'color: #00FF00; font-weight: bold;'
+                
+        # 3. Return on Equity (Health) - Green if > 15%
+        if 'ROE' in row.index:
+            roe_val = row['ROE']
+            if pd.notna(roe_val) and isinstance(roe_val, (int, float)) and roe_val > 15.0:
+                roe_idx = row.index.get_loc('ROE')
+                styles[roe_idx] = 'color: #00FF00; font-weight: bold;'
+
+        # 4. Revenue Growth (Prospects) - Green if > 10%
+        if 'Rev Growth' in row.index:
+            rev_val = row['Rev Growth']
+            if pd.notna(rev_val) and isinstance(rev_val, (int, float)) and rev_val > 10.0:
+                rev_idx = row.index.get_loc('Rev Growth')
+                styles[rev_idx] = 'color: #00FF00; font-weight: bold;'
+                
+        # 5. EPS (Health) - Green if positive
+        if 'EPS (TTM)' in row.index:
+            eps_val = row['EPS (TTM)']
+            if pd.notna(eps_val) and isinstance(eps_val, (int, float)):
+                eps_idx = row.index.get_loc('EPS (TTM)')
+                if eps_val > 0:
+                    styles[eps_idx] = 'color: #00FF00; font-weight: bold;'
+                else:
+                    styles[eps_idx] = 'color: #FF0000; font-weight: bold;' # Red if company is losing money
+                
+        return styles
+        
+        # 1. Price vs Desired Price Logic
+        if pd.notna(actual) and pd.notna(desired):
+            price_col_idx = row.index.get_loc('Actual Price')
+            diff_col_idx = row.index.get_loc('% Diff')
+            
+            if actual <= desired: color = '#00FF00'
+            elif actual <= (desired * 1.02): color = '#FFA500'
+            else: color = '#FF0000'
+                
+            styles[price_col_idx] = f'color: {color}; font-weight: bold;'
+            styles[diff_col_idx] = f'color: {color}; font-weight: bold;'
+            
         # 2. PEG Ratio Undervalued Logic (Green if between 0 and 1.0)
         if 'PEG Ratio' in row.index:
             peg_val = row['PEG Ratio']
@@ -1031,6 +1076,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
