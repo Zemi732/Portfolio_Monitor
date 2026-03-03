@@ -973,7 +973,7 @@ else:
 st.subheader("⚓ ASX 200 Bottom Drifters (Near 52W Low)")
 
 @st.cache_data(ttl=3600)
-def get_asx_bottom_drifters():
+def get_asx_bottom_drifters_v2(): # <--- Renamed to bust the cache!
     try:
         import requests
         import datetime
@@ -1003,10 +1003,11 @@ def get_asx_bottom_drifters():
         
         earnings_dates, pegs, roes, eps_ttm, rev_growths = [], [], [], [], []
         
+        print("\n--- Fetching Bottom Drifters Fundamentals ---")
         for t in bottom_10.index:
             stock = yf.Ticker(t)
             
-            # 1. Safely fetch Earnings Date (Isolated)
+            # 1. Safely fetch Earnings Date
             try:
                 cal = stock.calendar
                 if cal is not None and 'Earnings Date' in cal and len(cal['Earnings Date']) > 0:
@@ -1016,14 +1017,18 @@ def get_asx_bottom_drifters():
             except:
                 earnings_dates.append(None)
             
-            # 2. Safely fetch Fundamentals (Isolated)
+            # 2. Safely fetch Fundamentals
             try:
                 info = stock.info
+                # Print to terminal so we know it's not failing silently
+                print(f"Got info for {t} - ROE: {info.get('returnOnEquity')}") 
+                
                 pegs.append(info.get('trailingPegRatio') or info.get('pegRatio'))
                 roes.append((info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None)
                 eps_ttm.append(info.get('trailingEps'))
                 rev_growths.append((info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None)
-            except:
+            except Exception as e:
+                print(f"Failed to get info for {t}: {e}")
                 pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
         
         drifters_df = pd.DataFrame({
@@ -1044,7 +1049,8 @@ def get_asx_bottom_drifters():
         return pd.DataFrame()
 
 with st.spinner('Scanning for bottom drifters...'):
-    drifters_df = get_asx_bottom_drifters()
+    # <--- Make sure we are calling the new V2 function!
+    drifters_df = get_asx_bottom_drifters_v2() 
 
 if not drifters_df.empty:
     import datetime
@@ -1090,6 +1096,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
