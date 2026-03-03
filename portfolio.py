@@ -983,10 +983,11 @@ else:
 
 # ---> SECTION: ASX 200 BOTTOM DRIFTERS <---
 
+# ---> SECTION: ASX 200 BOTTOM DRIFTERS <---
 st.subheader("⚓ ASX 200 Bottom Drifters (Near 52W Low)")
 
 @st.cache_data(ttl=3600)
-def get_asx_bottom_drifters_v3(): # <--- Renamed to bust cache
+def get_asx_bottom_drifters_v3(force_refresh=True): # <--- Added parameter to break cache
     try:
         import requests
         import datetime
@@ -1015,7 +1016,7 @@ def get_asx_bottom_drifters_v3(): # <--- Renamed to bust cache
         bottom_10 = distance_to_low.sort_values().head(10)
         
         earnings_dates, pegs, roes, eps_ttm, rev_growths = [], [], [], [], []
-        pe_trailing, pe_forward = [], [] # <--- New Lists
+        pe_trailing, pe_forward = [], [] 
         
         for t in bottom_10.index:
             stock = yf.Ticker(t)
@@ -1048,8 +1049,8 @@ def get_asx_bottom_drifters_v3(): # <--- Renamed to bust cache
             'Company': df_asx200.set_index('Code').loc[bottom_10.index.str.replace('.AX', '', regex=False)]['Company'].values,
             'Above 52W Low': bottom_10.values,
             'Last Price': current_prices[bottom_10.index].values,
-            'Trailing P/E': pe_trailing, # <--- Added to dataframe
-            'Forward P/E': pe_forward,   # <--- Added to dataframe
+            'Trailing P/E': pe_trailing, 
+            'Forward P/E': pe_forward,   
             'PEG Ratio': pegs,
             'ROE': roes,
             'EPS': eps_ttm,
@@ -1063,7 +1064,7 @@ def get_asx_bottom_drifters_v3(): # <--- Renamed to bust cache
         return pd.DataFrame()
 
 with st.spinner('Scanning for bottom drifters...'):
-    drifters_df = get_asx_bottom_drifters_v3() 
+    drifters_df = get_asx_bottom_drifters_v3(force_refresh=True) # <--- Passed parameter
 
 if not drifters_df.empty:
     import datetime
@@ -1106,7 +1107,7 @@ if not drifters_df.empty:
     styled_drifters = (
         drifters_df.style.apply(style_drifters, axis=1).format({
             'Above 52W Low': '+{:.2f}%', 'Last Price': '${:.2f}', 
-            'Trailing P/E': '{:.1f}', 'Forward P/E': '{:.1f}', # <--- Formatted
+            'Trailing P/E': '{:.1f}', 'Forward P/E': '{:.1f}', 
             'PEG Ratio': '{:.2f}', 'ROE': '{:.2f}%', 'EPS': '${:.2f}', 'Rev Growth': '{:.2f}%'
         }, na_rep="-")
     )
@@ -1118,6 +1119,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
