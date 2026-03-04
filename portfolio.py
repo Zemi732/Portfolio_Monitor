@@ -624,6 +624,7 @@ if not df.empty:
         
         st.metric("💰 Total Realized P/L", f"${total_lifetime_realized:,.2f}", help="Lifetime realized profit/loss from all sold positions.")
         st.caption("Includes fully sold positions.")
+
 # ---> NEW SECTION: CORE PORTFOLIO 1-YEAR PERFORMANCE <---
 st.divider()
 st.subheader("📈 Global Core Performance (1-Year Normalized)")
@@ -637,9 +638,6 @@ def fetch_core_history():
         'EXCH': 'EXCH.AS',
         'BGBL': 'BGBL.AX',
         'VAS': 'VAS.AX',
-        'EMXC': 'EMXC', # Traded in the US
-        'QSML': 'QSML.AX',
-        'IWDA': 'IWDA.L'
     }
     
     # Only pull history for the Core Tickers you actually own or track
@@ -924,7 +922,7 @@ except FileNotFoundError:
     st.warning("Could not find 'Wish list.csv'. Please make sure it is saved in the exact same folder as your script.")
 
 # ---> SECTION: ASX 200 BARGAIN SCANNER <---
-# ---> SECTION: ASX 200 BARGAIN SCANNER <---
+
 st.subheader("📉 ASX 200 Daily Losers (Bargain Scanner)")
 
 @st.cache_data(ttl=3600)
@@ -1201,6 +1199,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
