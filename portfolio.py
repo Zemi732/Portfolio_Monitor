@@ -634,7 +634,7 @@ def fetch_core_history():
     # 1. Map the exact tickers for yfinance
     history_map = {
         'VUAA': 'VUAA.L',
-        'IWDA': 'IWDA.L'
+        'IWDA': 'IWDA.L',
         'XUSE': 'XUSE.SW',
         'EXCH': 'EXCH.AS',
         'BGBL': 'BGBL.AX',
@@ -1200,6 +1200,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
