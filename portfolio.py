@@ -624,6 +624,88 @@ if not df.empty:
         
         st.metric("💰 Total Realized P/L", f"${total_lifetime_realized:,.2f}", help="Lifetime realized profit/loss from all sold positions.")
         st.caption("Includes fully sold positions.")
+# ---> NEW SECTION: CORE PORTFOLIO 1-YEAR PERFORMANCE <---
+st.divider()
+st.subheader("📈 Global Core Performance (1-Year Normalized)")
+
+@st.cache_data(ttl=3600*24) # Cache for 24 hours to save API calls
+def fetch_core_history():
+    # 1. Map the exact tickers for yfinance
+    history_map = {
+        'VUAA': 'VUAA.L',
+        'XUSE': 'XUSE.SW',
+        'EXCH': 'EXCH.AS',
+        'BGBL': 'BGBL.AX',
+        'VAS': 'VAS.AX',
+        'EMXC': 'EMXC', # Traded in the US
+        'QSML': 'QSML.AX',
+        'IWDA': 'IWDA.L'
+    }
+    
+    # Only pull history for the Core Tickers you actually own or track
+    active_core = [t for t in CORE_TICKERS if t in history_map]
+    yf_tickers = [history_map[t] for t in active_core]
+    
+    try:
+        # Download 1 year of daily closing prices
+        data = yf.download(yf_tickers, period="1y", progress=False)
+        
+        if 'Close' in data.columns:
+            closes = data['Close']
+        else:
+            closes = data
+            
+        # Rename the columns back to your clean ticker names
+        rename_dict = {v: k for k, v in history_map.items()}
+        closes = closes.rename(columns=rename_dict)
+        
+        # Drop any empty columns
+        closes = closes.dropna(axis=1, how='all')
+        
+        # Forward-fill any missing daily data (due to different public holidays globally)
+        closes = closes.ffill()
+        
+        # 2. NORMALIZE THE DATA: Convert prices to percentage growth from Day 1
+        # Subtracting 1 and multiplying by 100 turns a 1.05 multiplier into a 5.0% return
+        normalized = ((closes / closes.iloc[0]) - 1) * 100
+        
+        # 3. Melt the dataframe so Plotly can read it easily
+        melted_df = normalized.reset_index().melt(id_vars=['Date'], var_name='Ticker', value_name='Return (%)')
+        return melted_df
+        
+    except Exception as e:
+        st.error(f"Could not load historical data: {e}")
+        return pd.DataFrame()
+
+with st.spinner("Fetching historical core performance..."):
+    history_df = fetch_core_history()
+
+if not history_df.empty:
+    # Build an interactive Plotly line chart
+    fig_hist = px.line(
+        history_df, 
+        x='Date', 
+        y='Return (%)', 
+        color='Ticker',
+        color_discrete_sequence=px.colors.qualitative.Set1
+    )
+    
+    # Styling the chart to look like a professional terminal
+    fig_hist.update_layout(
+        hovermode="x unified",
+        xaxis_title="",
+        yaxis_title="Return (%)",
+        margin=dict(l=0, r=0, t=30, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    
+    # Add a bold "Zero" line so you can easily see what is up and what is down
+    fig_hist.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.5)
+    
+    st.plotly_chart(fig_hist, use_container_width=True)
+else:
+    st.info("Core history currently unavailable.")
+# ---> END CORE PERFORMANCE SECTION <---
 
 # ---> SHOPPING LIST <---
 st.subheader("🛒 Shopping List")
@@ -1119,6 +1201,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
