@@ -646,7 +646,7 @@ def fetch_core_history():
     
     try:
         # Download 1 year of daily closing prices
-        data = yf.download(yf_tickers, period="3mo", progress=False)
+        data = yf.download(yf_tickers, period="1mo", progress=False)
         
         if 'Close' in data.columns:
             closes = data['Close']
@@ -1199,6 +1199,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
