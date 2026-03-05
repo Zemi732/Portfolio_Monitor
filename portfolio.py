@@ -27,6 +27,74 @@ MER_RATES = {
 # 1. SIDEBAR: FETCH & EDIT FX RATES
 # ==========================================
 
+
+# ---> NEW SECTION: ETF PREMIUM/DISCOUNT CHECKER <---
+st.sidebar.divider()
+st.sidebar.subheader("⚖️ ETF Fair Value Check")
+
+@st.cache_data(ttl=300) # Cache for 5 minutes
+def get_etf_nav(yf_ticker):
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker(yf_ticker)
+        
+        # Grab live price (using fast_info for speed, fallback to info)
+        try:
+            live_price = ticker.fast_info['last_price']
+        except:
+            live_price = ticker.info.get('currentPrice') or ticker.info.get('regularMarketPrice')
+            
+        # Grab the official NAV
+        nav_price = ticker.info.get('navPrice')
+        
+        if live_price and nav_price:
+            pd_pct = ((live_price - nav_price) / nav_price) * 100
+            return live_price, nav_price, pd_pct
+        return live_price, None, None # Returns just the price if NAV is missing
+        
+    except Exception as e:
+        return None, None, None
+
+with st.sidebar:
+    # Map your core display names to their exact Yahoo Finance tickers
+    nav_ticker_map = {
+        'VAS': 'VAS.AX',
+        'EXCH': 'EXCH.AS',
+        'VUAA': 'VUAA.L',
+        'XUSE': 'XUSE.SW',
+
+    }
+    
+    # Create the interactive dropdown menu
+    selected_etf = st.selectbox("Select ETF to check:", list(nav_ticker_map.keys()))
+    yf_target = nav_ticker_map[selected_etf]
+    
+    # Fetch the data
+    live_p, nav_p, pd_pct = get_etf_nav(yf_target)
+    
+    if live_p is not None and nav_p is not None:
+        # Display full Premium/Discount comparison
+        st.metric(
+            label=f"{selected_etf} Live vs NAV (${nav_p:.2f})", 
+            value=f"${live_p:.2f}", 
+            delta=f"{pd_pct:+.2f}%",
+            delta_color="inverse" 
+        )
+        
+        if pd_pct > 0.5:
+            st.caption("⚠️ Trading at a Premium (Overpriced)")
+        elif pd_pct < -0.5:
+            st.caption("✅ Trading at a Discount (Bargain)")
+        else:
+            st.caption("⚖️ Trading near Fair Value")
+            
+    elif live_p is not None:
+        # Fallback if yfinance has the price but drops the NAV data
+        st.metric(label=f"{selected_etf} Live Price", value=f"${live_p:.2f}")
+        st.caption("⚠️ Yahoo Finance NAV data missing for this ticker today.")
+    else:
+        st.info("Pricing data currently unavailable.")
+
 # ---> NEW SECTION: VIX VOLATILITY TRACKER (SIDEBAR) <---
 st.sidebar.divider()
 st.sidebar.subheader("🚨 Market Sentiment")
@@ -1263,6 +1331,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
