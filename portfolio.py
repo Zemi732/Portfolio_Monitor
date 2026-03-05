@@ -7,6 +7,9 @@ import datetime
 from datetime import timedelta
 import pytz
 
+MANUAL_PRICES = {
+    'PMGOLD.AX': 72.84  # <--- Change this number manually whenever you want an updated view
+}
 st.set_page_config(layout="wide", page_title="Portfolio Dashboard")
 
 # ==========================================
@@ -233,6 +236,12 @@ def load_data():
         st.error(f"Error loading data: {e}")
         return pd.DataFrame(), 0.0, 0.0
 
+# --- MANUAL PRICE OVERRIDES ---
+# Update these values manually if yfinance returns broken or stale data
+MANUAL_PRICES = {
+    "PMGOLD": 72.83  # <--- Change this number to update PMGOLD's price
+}
+
 # --- B. FETCH PRICES ---
 TICKER_MAP = {
     "MSFT": "MSFT",
@@ -254,6 +263,15 @@ def fetch_market_data(ticker_list):
         usd_aud_rate = 1.0 
         
     for t in ticker_list:
+        
+        # ---> NEW: 1. Check for Manual Override FIRST <---
+        if t in MANUAL_PRICES:
+            prices[t] = float(MANUAL_PRICES[t])
+            # Set FX multiplier to 1.0 since PMGOLD is priced in AUD
+            fx_multipliers[t] = 1.0 
+            continue # Skip the rest of the loop and move to the next ticker
+            
+        # ---> 2. Normal yfinance logic for everything else <---
         if t in TICKER_MAP:
             yf_ticker = TICKER_MAP[t]
         elif 'US_TICKERS' in globals() and t in US_TICKERS:
@@ -1200,6 +1218,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
