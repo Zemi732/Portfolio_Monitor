@@ -32,7 +32,6 @@ MER_RATES = {
 st.sidebar.divider()
 st.sidebar.subheader("🚨 Market Sentiment")
 
-@st.cache_data(ttl=300, show_spinner=False) # Caches for 5 minutes so it doesn't slow down your app
 def get_vix_data():
     try:
         import yfinance as yf
@@ -1263,6 +1262,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
