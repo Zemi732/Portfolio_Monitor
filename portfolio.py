@@ -75,7 +75,7 @@ with st.sidebar:
 with st.sidebar:
     st.header("Global Settings")
 
-    @st.cache_data
+    @st.cache_data(ttl=300, show_spinner=False) 
     def get_exchange_rates():
         tickers = ['AUDUSD=X', 'AUDEUR=X', 'AUDPLN=X']
         try:
@@ -341,7 +341,7 @@ def fetch_market_data(ticker_list):
     return prices, fx_multipliers
     
 # --- FETCH EARNINGS DATES ---
-@st.cache_data(ttl=3600*12) 
+@st.cache_data(ttl=3600*12, show_spinner=False)  
 def fetch_earnings_dates(ticker_list):
     earnings_map = {}
     for t in ticker_list:
@@ -693,7 +693,7 @@ if not df.empty:
 st.divider()
 st.subheader("📈 Global Core Performance (1-Year Normalized)")
 
-@st.cache_data(ttl=3600*24) # Cache for 24 hours to save API calls
+@st.cache_data(ttl=3600*24, show_spinner=False) ) # Cache for 24 hours to save API calls
 def fetch_core_history():
     # 1. Map the exact tickers for yfinance
     history_map = {
@@ -990,7 +990,7 @@ except FileNotFoundError:
 
 st.subheader("📉 ASX 200 Daily Losers (Bargain Scanner)")
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False) 
 def get_asx_losers_v2(): # <--- Renamed to bust cache
     try:
         import requests
@@ -1131,7 +1131,7 @@ else:
 # ---> SECTION: ASX 200 BOTTOM DRIFTERS <---
 st.subheader("⚓ ASX 200 Bottom Drifters (Near 52W Low)")
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False) 
 def get_asx_bottom_drifters_v3(force_refresh=True): # <--- Added parameter to break cache
     try:
         import requests
@@ -1264,6 +1264,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
