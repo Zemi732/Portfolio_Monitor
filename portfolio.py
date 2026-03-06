@@ -32,7 +32,7 @@ MER_RATES = {
 st.sidebar.divider()
 st.sidebar.subheader("🚨 Market Sentiment")
 
-@st.cache_data(ttl=300) # Caches for 5 minutes so it doesn't slow down your app
+@st.cache_data(ttl=300, show_spinner=False) # Caches for 5 minutes so it doesn't slow down your app
 def get_vix_data():
     try:
         import yfinance as yf
@@ -495,7 +495,7 @@ if not df.empty:
     # --- TARGETS SIDEBAR ---
     st.sidebar.title("🎯 Targets")
     targets = {}
-    PRESETS = {'VUAA': 50, 'XUSE': 30, 'VAS': 10, 'EXCH': 10, 'EMXC': 0, 'QSML': 0}
+    PRESETS = {'VUAA': 40, 'XUSE': 30, 'VAS': 20, 'EXCH': 10}
     st.sidebar.markdown("### 🟢 Core")
     for ticker in CORE_ORDER:
         if ticker in df['Ticker'].values:
@@ -1264,6 +1264,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
