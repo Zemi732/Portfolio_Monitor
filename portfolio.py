@@ -7,10 +7,11 @@ import datetime
 from datetime import timedelta
 import pytz
 
+st.set_page_config(layout="wide", page_title="Portfolio Dashboard")
+
 MANUAL_PRICES = {
     'PMGOLD.AX': 72.84  # <--- Change this number manually whenever you want an updated view
 }
-st.set_page_config(layout="wide", page_title="Portfolio Dashboard")
 
 # ==========================================
 # 0. CONFIGURATION: FEES (MER)
@@ -24,27 +25,281 @@ MER_RATES = {
 }
 
 # ==========================================
-# 1. SIDEBAR: FETCH & EDIT FX RATES
+# CACHED DATA FUNCTIONS (ALL WITH SPINNNERS DISABLED)
 # ==========================================
 
+@st.cache_data(ttl=300, show_spinner=False) 
+def get_exchange_rates():
+    tickers = ['AUDUSD=X', 'AUDEUR=X', 'AUDPLN=X']
+    try:
+        data = yf.download(tickers, period="1d", progress=False)['Close'].iloc[-1]
+        return pd.DataFrame({
+            'Pair': ['AUD/USD', 'AUD/EUR', 'AUD/PLN'],
+            'Rate': [data['AUDUSD=X'], data['AUDEUR=X'], data['AUDPLN=X']]
+        })
+    except:
+        return pd.DataFrame({
+            'Pair': ['AUD/USD', 'AUD/EUR', 'AUD/PLN'],
+            'Rate': [0.65, 0.60, 2.65]
+        })
 
+@st.cache_data(ttl=300, show_spinner=False)
+def get_futures_data():
+    try:
+        tickers = yf.Tickers("ES=F YIR=F")
+        es_price = tickers.tickers['ES=F'].fast_info['last_price']
+        es_prev = tickers.tickers['ES=F'].fast_info['previous_close']
+        es_pct = ((es_price - es_prev) / es_prev) * 100
+        
+        yir_price = tickers.tickers['YIR=F'].fast_info['last_price']
+        yir_prev = tickers.tickers['YIR=F'].fast_info['previous_close']
+        yir_pct = ((yir_price - yir_prev) / yir_prev) * 100
+        return es_price, es_pct, yir_price, yir_pct
+    except Exception:
+        return None, None, None, None
 
-
-    @st.cache_data(ttl=300, show_spinner=False) 
-    def get_exchange_rates():
-        tickers = ['AUDUSD=X', 'AUDEUR=X', 'AUDPLN=X']
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_market_data(ticker_list):
+    prices = {}
+    fx_multipliers = {}
+    
+    try:
+        usd_aud_rate = yf.Ticker("USDAUD=X").fast_info['last_price']
+    except:
+        usd_aud_rate = 1.0 
+        
+    for t in ticker_list:
+        if t in MANUAL_PRICES:
+            prices[t] = float(MANUAL_PRICES[t])
+            fx_multipliers[t] = 1.0 
+            continue 
+            
+        if t in TICKER_MAP:
+            yf_ticker = TICKER_MAP[t]
+        elif 'US_TICKERS' in globals() and t in US_TICKERS:
+            yf_ticker = t
+        else:
+            yf_ticker = f"{t}.AX"
+            
         try:
-            data = yf.download(tickers, period="1d", progress=False)['Close'].iloc[-1]
-            return pd.DataFrame({
-                'Pair': ['AUD/USD', 'AUD/EUR', 'AUD/PLN'],
-                'Rate': [data['AUDUSD=X'], data['AUDEUR=X'], data['AUDPLN=X']]
-            })
-        except:
-            return pd.DataFrame({
-                'Pair': ['AUD/USD', 'AUD/EUR', 'AUD/PLN'],
-                'Rate': [0.65, 0.60, 2.65]
-            })
+            ticker_obj = yf.Ticker(yf_ticker)
+            prices[t] = float(ticker_obj.fast_info['last_price'])
+            
+            if yf_ticker.endswith('.AX'):
+                fx_multipliers[t] = 1.0
+            else:
+                fx_multipliers[t] = usd_aud_rate
+        except Exception as e:
+            prices[t] = 0.0
+            fx_multipliers[t] = 1.0
+            
+    return prices, fx_multipliers
 
+@st.cache_data(ttl=3600*12, show_spinner=False)  
+def fetch_earnings_dates(ticker_list):
+    earnings_map = {}
+    for t in ticker_list:
+        if t in US_TICKERS: search_t = t
+        else: search_t = f"{t}.AX"
+        
+        try:
+            stock = yf.Ticker(search_t)
+            cal = stock.calendar
+            if cal and 'Earnings Date' in cal:
+                dates = cal['Earnings Date']
+                if dates:
+                    next_date = dates[0]
+                    earnings_map[t] = next_date.date() 
+                else:
+                    earnings_map[t] = None
+            else:
+                earnings_map[t] = None
+        except:
+            earnings_map[t] = None
+            
+    return earnings_map
+
+@st.cache_data(ttl=3600*24, show_spinner=False)
+def fetch_core_history():
+    history_map = {
+        'VUAA': 'VUAA.L', 'IWDA': 'IWDA.L', 'XUSE': 'XUSE.SW',
+        'EXCH': 'EXCH.AS', 'BGBL': 'BGBL.AX', 'VAS': 'VAS.AX',
+    }
+    
+    active_core = [t for t in CORE_TICKERS if t in history_map]
+    yf_tickers = [history_map[t] for t in active_core]
+    
+    try:
+        data = yf.download(yf_tickers, period="1mo", progress=False)
+        if 'Close' in data.columns: closes = data['Close']
+        else: closes = data
+            
+        rename_dict = {v: k for k, v in history_map.items()}
+        closes = closes.rename(columns=rename_dict)
+        closes = closes.dropna(axis=1, how='all')
+        closes = closes.ffill()
+        
+        normalized = ((closes / closes.iloc[0]) - 1) * 100
+        melted_df = normalized.reset_index().melt(id_vars=['Date'], var_name='Ticker', value_name='Return (%)')
+        return melted_df
+    except Exception as e:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=3600, show_spinner=False) 
+def get_asx_losers_v2():
+    try:
+        import requests
+        url = 'https://en.wikipedia.org/wiki/S%26P/ASX_200'
+        header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        req = requests.get(url, headers=header)
+        tables = pd.read_html(req.text)
+        
+        df_asx200 = None
+        for table in tables:
+            if 'Code' in table.columns and 'Company' in table.columns:
+                df_asx200 = table
+                break
+                
+        if df_asx200 is None: return pd.DataFrame()
+        
+        tickers = df_asx200['Code'].astype(str) + '.AX'
+        ticker_list = tickers.tolist()
+
+        data = yf.download(ticker_list, period="5d", progress=False)
+        if 'Close' in data.columns: data = data['Close']
+        if data.empty or len(data) < 2: return pd.DataFrame()
+        
+        recent_data = data.iloc[-2:] 
+        pct_change = ((recent_data.iloc[1] - recent_data.iloc[0]) / recent_data.iloc[0]) * 100
+        losers = pct_change.sort_values().head(10)
+        
+        year_lows, year_highs = [], []
+        pegs, roes, eps_ttm, rev_growths = [], [], [], []
+        pe_trailing, pe_forward = [], [] 
+        
+        for t in losers.index:
+            stock = yf.Ticker(t)
+            try: year_lows.append(stock.fast_info['year_low'])
+            except: year_lows.append(None)
+                
+            try: year_highs.append(stock.fast_info['year_high'])
+            except: year_highs.append(None)
+            
+            try:
+                info = stock.info
+                pegs.append(info.get('trailingPegRatio') or info.get('pegRatio'))
+                roes.append((info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None)
+                eps_ttm.append(info.get('trailingEps'))
+                rev_growths.append((info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None)
+                pe_trailing.append(info.get('trailingPE'))
+                pe_forward.append(info.get('forwardPE'))
+            except:
+                pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
+                pe_trailing.append(None); pe_forward.append(None)
+            
+        last_prices = recent_data.iloc[1][losers.index].values
+        
+        above_52w_low = []
+        for lp, yl in zip(last_prices, year_lows):
+            if pd.notna(lp) and pd.notna(yl) and yl > 0: above_52w_low.append(((lp - yl) / yl) * 100)
+            else: above_52w_low.append(None)
+        
+        losers_df = pd.DataFrame({
+            'Ticker': losers.index.str.replace('.AX', '', regex=False),
+            'Company': df_asx200.set_index('Code').loc[losers.index.str.replace('.AX', '', regex=False)]['Company'].values,
+            'Drop %': losers.values,
+            'Last Price': last_prices,
+            'Above 52W Low': above_52w_low,
+            'Trailing P/E': pe_trailing, 
+            'Forward P/E': pe_forward,   
+            'PEG Ratio': pegs,
+            'ROE': roes,
+            'EPS': eps_ttm,
+            'Rev Growth': rev_growths
+        })
+        return losers_df
+    except Exception as e:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=3600, show_spinner=False) 
+def get_asx_bottom_drifters_v3(force_refresh=True): 
+    try:
+        import requests
+        import datetime
+        
+        url = 'https://en.wikipedia.org/wiki/S%26P/ASX_200'
+        header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        req = requests.get(url, headers=header)
+        tables = pd.read_html(req.text)
+        
+        df_asx200 = None
+        for table in tables:
+            if 'Code' in table.columns and 'Company' in table.columns:
+                df_asx200 = table
+                break
+                
+        if df_asx200 is None: return pd.DataFrame()
+        
+        tickers = df_asx200['Code'].astype(str) + '.AX'
+        data = yf.download(tickers.tolist(), period="1y", progress=False)
+        if data.empty: return pd.DataFrame()
+        
+        closes, lows, highs = data['Close'], data['Low'], data['High']
+        current_prices, year_lows, year_highs = closes.iloc[-1], lows.min(), highs.max()
+        
+        distance_to_low = ((current_prices - year_lows) / year_lows) * 100
+        bottom_10 = distance_to_low.sort_values().head(10)
+        
+        earnings_dates, pegs, roes, eps_ttm, rev_growths = [], [], [], [], []
+        pe_trailing, pe_forward = [], [] 
+        
+        for t in bottom_10.index:
+            stock = yf.Ticker(t)
+            try:
+                cal = stock.calendar
+                if cal is not None and 'Earnings Date' in cal and len(cal['Earnings Date']) > 0:
+                    earnings_dates.append(cal['Earnings Date'][0].date())
+                else: 
+                    earnings_dates.append(None)
+            except:
+                earnings_dates.append(None)
+            
+            try:
+                info = stock.info
+                pegs.append(info.get('trailingPegRatio') or info.get('pegRatio'))
+                roes.append((info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None)
+                eps_ttm.append(info.get('trailingEps'))
+                rev_growths.append((info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None)
+                pe_trailing.append(info.get('trailingPE'))
+                pe_forward.append(info.get('forwardPE'))
+            except Exception as e:
+                pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
+                pe_trailing.append(None); pe_forward.append(None)
+        
+        drifters_df = pd.DataFrame({
+            'Ticker': bottom_10.index.str.replace('.AX', '', regex=False),
+            'Company': df_asx200.set_index('Code').loc[bottom_10.index.str.replace('.AX', '', regex=False)]['Company'].values,
+            'Above 52W Low': bottom_10.values,
+            'Last Price': current_prices[bottom_10.index].values,
+            'Trailing P/E': pe_trailing, 
+            'Forward P/E': pe_forward,   
+            'PEG Ratio': pegs,
+            'ROE': roes,
+            'EPS': eps_ttm,
+            'Rev Growth': rev_growths,
+            'Next Earnings': earnings_dates
+        })
+        return drifters_df
+    except Exception as e:
+        return pd.DataFrame()
+
+
+# ==========================================
+# 1. SIDEBAR SETUP
+# ==========================================
+with st.sidebar:
+    st.header("Global Settings")
+    
     fx_data = get_exchange_rates()
 
     st.subheader("Exchange Rates (Live)")
@@ -89,11 +344,28 @@ MER_RATES = {
     </div>
     """, unsafe_allow_html=True)
     
+    st.divider()
+    
+    # ---> PRE-MARKET FUTURES TRACKER <---
+    st.subheader("🔮 Pre-Market Futures")
+    es_p, es_change, yir_p, yir_change = get_futures_data()
+    
+    if es_p is not None:
+        c_fut1, c_fut2 = st.columns(2)
+        c_fut1.metric(label="S&P 500", value=f"{es_p:,.0f}", delta=f"{es_change:+.2f}%")
+        c_fut2.metric(label="ASX 200", value=f"{yir_p:,.0f}", delta=f"{yir_change:+.2f}%")
+        
+        if es_change > 0.4: st.caption("🟢 Strong US Open Expected")
+        elif es_change < -0.4: st.caption("🔴 Weak US Open Expected")
+        else: st.caption("🟡 Flat/Neutral Open Expected")
+    else:
+        st.info("Futures data currently unavailable.")
+    
+    st.divider()
+    
     if st.button("🔄 Refresh Prices"):
         st.cache_data.clear()
         st.rerun()
-    st.markdown("---")
-
 
 # ==========================================
 # 2. MAIN PAGE: DATA LOADING & LOGIC
@@ -116,31 +388,25 @@ CORE_ORDER = ['VUAA', 'XUSE', 'EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML']
 CORE_TICKERS = ['VUAA', 'XUSE', 'EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML', 'IWDA']
 US_TICKERS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'TSLA', 'PLTR'] 
 
-# --- DEEP GEOGRAPHIC MAPPING (X-RAY) ---
 GEO_MAP = {
     'VAS': {'Australia': 1.0}, 'BHP': {'Australia': 1.0}, 'CBA': {'Australia': 1.0}, 
     'CSL': {'Australia': 1.0}, 'WOW': {'Australia': 1.0}, 'GYG': {'Australia': 1.0}, 
     'QOR': {'Australia': 1.0}, 'XRO': {'Australia': 1.0}, 'PMGOLD': {'Australia': 1.0},
-    
     'NVDA': {'United States': 1.0}, 'MSFT': {'United States': 1.0}, 'AAPL': {'United States': 1.0}, 
     'AMZN': {'United States': 1.0}, 'TSLA': {'United States': 1.0}, 'PLTR': {'United States': 1.0}, 
     'IVV': {'United States': 1.0}, 'VUAA': {'United States': 1.0},
-    
     'IWDA': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
     'XUSE': {'Japan': 0.19, 'United Kingdom': 0.13, 'Canada': 0.12, 'France': 0.09, 'Germany': 0.08, 'Australia': 0.06, 'Rest of World': 0.33},
     'BGBL': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
     'VGS': {'United States': 0.72, 'Japan': 0.06, 'United Kingdom': 0.04, 'France': 0.03, 'Canada': 0.03, 'Rest of World': 0.12},
     'VVLU': {'United States': 0.65, 'Japan': 0.10, 'United Kingdom': 0.05, 'Rest of World': 0.20},
     'QSML': {'United States': 0.60, 'Japan': 0.10, 'United Kingdom': 0.05, 'Rest of World': 0.25},
-    
     'EMXC': {'India': 0.25, 'Taiwan': 0.25, 'South Korea': 0.15, 'Brazil': 0.05, 'Rest of World': 0.30},
     'EXCH': {'Taiwan': 0.29, 'South Korea': 0.21, 'India': 0.18, 'Brazil': 0.06, 'South Africa': 0.05, 'Rest of World': 0.21},
-    
     'ATOM': {'United States': 0.70, 'Rest of World': 0.30}, 
     'SEMI': {'United States': 0.70, 'Taiwan': 0.15, 'Rest of World': 0.15}, 
     'WIRE': {'United States': 0.50, 'Europe': 0.30, 'Rest of World': 0.20}
 }
-# ---------------------------------------
 
 FX_SENSITIVITY = {
     'IWDA': 'Very High', 'XUSE': 'Very High', 'EXCH': 'Very High', 'VUAA': 'Very High', 'IVV': 'Very High', 'SEMI': 'Very High', 
@@ -164,16 +430,19 @@ def get_fx_tilt(ticker, aud_usd):
     else:
         return "Strong Buy" if sens in ['Low', 'Very Low'] else "Buy" if sens == 'Medium' else "Strong Sell"
 
+TICKER_MAP = {
+    "MSFT": "MSFT", "EXCH": "EXCH.AS", "VUAA": "VUAA.L",
+    "XUSE": "XUSE.SW", "PMGOLD": "PMGOLD.AX", "IWDA": "IWDA.L" 
+}
+
 # --- A. LOAD HOLDINGS & CALCULATE METRICS ---
 def load_data():
     total_brokerage_paid = Decimal('0')
     total_realized_pl_lifetime = Decimal('0')
     
     try:
-        # ---> LIVE HOLDINGS CONNECTION <---
         sheet_url = "https://docs.google.com/spreadsheets/d/1yzFLgUMXo0iutBoEEEEstJl5EcXHHpKu6EG082fEWGI/export?format=csv"
         df_trades = pd.read_csv(sheet_url)
-        # ----------------------------------
         df_trades.columns = df_trades.columns.str.strip()
         df_trades['Trade Date'] = pd.to_datetime(df_trades['Trade Date'], dayfirst=True, format='mixed')
         df_trades = df_trades.sort_values('Trade Date', ascending=True)
@@ -237,89 +506,6 @@ def load_data():
         st.error(f"Error loading data: {e}")
         return pd.DataFrame(), 0.0, 0.0
 
-# --- MANUAL PRICE OVERRIDES ---
-# Update these values manually if yfinance returns broken or stale data
-MANUAL_PRICES = {
-    "PMGOLD": 72.83  # <--- Change this number to update PMGOLD's price
-}
-
-# --- B. FETCH PRICES ---
-TICKER_MAP = {
-    "MSFT": "MSFT",
-    "EXCH": "EXCH.AS",
-    "VUAA": "VUAA.L",
-    "XUSE": "XUSE.SW",
-    "PMGOLD": "PMGOLD.AX",
-    "IWDA": "IWDA.L" 
-}
-
-@st.cache_data(ttl=300, show_spinner=False)
-def fetch_market_data(ticker_list):
-    prices = {}
-    fx_multipliers = {}
-    
-    try:
-        usd_aud_rate = yf.Ticker("USDAUD=X").fast_info['last_price']
-    except:
-        usd_aud_rate = 1.0 
-        
-    for t in ticker_list:
-        
-        # ---> NEW: 1. Check for Manual Override FIRST <---
-        if t in MANUAL_PRICES:
-            prices[t] = float(MANUAL_PRICES[t])
-            # Set FX multiplier to 1.0 since PMGOLD is priced in AUD
-            fx_multipliers[t] = 1.0 
-            continue # Skip the rest of the loop and move to the next ticker
-            
-        # ---> 2. Normal yfinance logic for everything else <---
-        if t in TICKER_MAP:
-            yf_ticker = TICKER_MAP[t]
-        elif 'US_TICKERS' in globals() and t in US_TICKERS:
-            yf_ticker = t
-        else:
-            yf_ticker = f"{t}.AX"
-            
-        try:
-            ticker_obj = yf.Ticker(yf_ticker)
-            prices[t] = float(ticker_obj.fast_info['last_price'])
-            
-            if yf_ticker.endswith('.AX'):
-                fx_multipliers[t] = 1.0
-            else:
-                fx_multipliers[t] = usd_aud_rate
-                
-        except Exception as e:
-            prices[t] = 0.0
-            fx_multipliers[t] = 1.0
-            
-    return prices, fx_multipliers
-    
-# --- FETCH EARNINGS DATES ---
-@st.cache_data(ttl=3600*12, show_spinner=False)  
-def fetch_earnings_dates(ticker_list):
-    earnings_map = {}
-    for t in ticker_list:
-        if t in US_TICKERS: search_t = t
-        else: search_t = f"{t}.AX"
-        
-        try:
-            stock = yf.Ticker(search_t)
-            cal = stock.calendar
-            if cal and 'Earnings Date' in cal:
-                dates = cal['Earnings Date']
-                if dates:
-                    next_date = dates[0]
-                    earnings_map[t] = next_date.date() 
-                else:
-                    earnings_map[t] = None
-            else:
-                earnings_map[t] = None
-        except:
-            earnings_map[t] = None
-            
-    return earnings_map
-
 # --- C. STYLING ---
 def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price'):
     format_dict = {
@@ -333,7 +519,6 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
         styles = ['' for _ in row.index]
         if row['Ticker'] == 'Satellites': styles = ['font-weight: bold' for _ in row.index]
         
-        # P/L %
         try:
             if 'P/L %' in row and pd.notnull(row['P/L %']):
                 rise_val = row['P/L %']
@@ -343,7 +528,6 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
                 if 'P/L %' in row.index: styles[list(row.index).index('P/L %')] = rise_bg
         except: pass
 
-        # P/L (AUD)
         try:
             if 'P/L (AUD)' in row and pd.notnull(row['P/L (AUD)']):
                 prof_val = row['P/L (AUD)']
@@ -352,7 +536,6 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
                 if 'P/L (AUD)' in row.index: styles[list(row.index).index('P/L (AUD)')] = prof_style
         except: pass
 
-        # Realized P/L
         try:
             if 'Realized P/L' in row and pd.notnull(row['Realized P/L']):
                 real_val = row['Realized P/L']
@@ -362,7 +545,6 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
                 if 'Realized P/L' in row.index: styles[list(row.index).index('Realized P/L')] = real_style
         except: pass
 
-        # FX Tilt
         try:
             if 'FX Tilt' in row:
                 tilt = row['FX Tilt']
@@ -375,7 +557,6 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
                 if 'FX Tilt' in row.index: styles[list(row.index).index('FX Tilt')] = tilt_bg
         except: pass
 
-        # Deficit
         try:
             if 'Deficit' in row and pd.notnull(row['Deficit']):
                 def_val = row['Deficit']
@@ -385,7 +566,6 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
                 if 'Deficit' in row.index: styles[list(row.index).index('Deficit')] = def_style
         except: pass
         
-        # Next Earnings (RED if < 7 days)
         try:
             if 'Next Earnings' in row:
                 earnings_date = row['Next Earnings']
@@ -398,7 +578,6 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
                         if 'Next Earnings' in row.index: styles[list(row.index).index('Next Earnings')] = earn_style
         except: pass
 
-        # Distribution Logic
         try:
             if 'Distribution' in row and pd.notnull(row['Distribution']):
                 dist_val = row['Distribution']
@@ -419,10 +598,8 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
 df, total_brokerage_val, total_lifetime_realized = load_data()
 
 if not df.empty:
-    # 1. Fetch live prices & FX rates
+    # 1. Fetch live prices & FX rates natively (NO SPINNERS)
     ticker_list = df['Ticker'].tolist()
-    
-    # Just call the functions directly without the spinner blocks!
     current_prices, fx_multipliers = fetch_market_data(ticker_list)
     earnings_dates = fetch_earnings_dates(ticker_list)
 
@@ -436,7 +613,7 @@ if not df.empty:
     df['FX Rate'] = df['Ticker'].map(fx_multipliers)
     df['Next Earnings'] = df['Ticker'].map(earnings_dates) 
     
-    # 3. Calculate Wealth Metrics (Normalized to AUD)
+    # 3. Calculate Wealth Metrics
     df['Rise'] = ((df['Current_Price'] - df['Avg_Price']) / df['Avg_Price']) * 100
     df['FX Tilt'] = df['Ticker'].apply(lambda t: get_fx_tilt(t, aud_usd))
     
@@ -484,35 +661,27 @@ if not df.empty:
     sat_row = None
     if not df_sat.empty:
         sat_val = df_sat['Market_Value_AUD'].sum()
-        
         if sat_val > 0:
             weighted_avg_price = (df_sat['Avg_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
             weighted_current_price = (df_sat['Current_Price'] * df_sat['Market_Value_AUD']).sum() / sat_val
             sat_rise = ((weighted_current_price - weighted_avg_price) / weighted_avg_price) * 100 if weighted_avg_price > 0 else 0
         else:
-            weighted_avg_price = 0
-            weighted_current_price = 0
-            sat_rise = 0
+            weighted_avg_price = 0; weighted_current_price = 0; sat_rise = 0
 
-        # Build the dictionary to perfectly match the pre-renamed columns
         sat_row = {
-            'Ticker': 'Satellites',
-            'Market_Value_AUD': sat_val,
-            'Avg_Price': weighted_avg_price,
-            'Current_Price': weighted_current_price,
+            'Ticker': 'Satellites', 'Market_Value_AUD': sat_val,
+            'Avg_Price': weighted_avg_price, 'Current_Price': weighted_current_price,
             'Rise': sat_rise,
             'Deficit': df_sat['Deficit'].sum() if 'Deficit' in df_sat.columns else 0,
             'Gain_Loss_Native': df_sat['Gain_Loss_Native'].sum() if 'Gain_Loss_Native' in df_sat.columns else 0,
             'Realized_PL_Active': df_sat['Realized_PL_Active'].sum() if 'Realized_PL_Active' in df_sat.columns else 0
         }
 
-    # Now handle Core Table
     if not df_core.empty:
         if 'CORE_ORDER' in globals():
             df_core['Ticker'] = pd.Categorical(df_core['Ticker'], categories=CORE_ORDER, ordered=True)
         df_core = df_core.sort_values('Ticker')
         
-        # Append Satellite row here, BEFORE columns are renamed!
         if sat_row is not None: 
             df_core = pd.concat([df_core, pd.DataFrame([sat_row])], ignore_index=True)
             
@@ -520,34 +689,24 @@ if not df.empty:
         df_core['Profit'] = df_core['Gain_Loss_Native']
         df_core['Realized P/L'] = df_core['Realized_PL_Active']
         df_core = df_core.rename(columns={
-            'Rise': 'P/L %', 
-            'Profit': 'P/L (AUD)', 
-            'Current_Price': 'ASX Price'
+            'Rise': 'P/L %', 'Profit': 'P/L (AUD)', 'Current_Price': 'ASX Price'
         })
 
-    # Now handle US Table
     if not df_us.empty: 
         df_us['Distribution'] = (df_us['Market_Value_AUD'] / total_value_aud) * 100
         df_us['Profit'] = df_us['Gain_Loss_Native']
         df_us['Realized P/L'] = df_us['Realized_PL_Active']
         df_us = df_us.rename(columns={
-            'Rise': 'P/L %', 
-            'Profit': 'P/L (AUD)', 
-            'Current_Price': 'Price (USD)', 
-            'Avg_Price': 'Avg Price (USD)'
+            'Rise': 'P/L %', 'Profit': 'P/L (AUD)', 'Current_Price': 'Price (USD)', 'Avg_Price': 'Avg Price (USD)'
         })
 
-    # Now handle Satellite Table
     if not df_sat.empty: 
         df_sat = df_sat.sort_values('Rise', ascending=False)
         df_sat['Distribution'] = (df_sat['Market_Value_AUD'] / total_value_aud) * 100
         df_sat['Profit'] = df_sat['Gain_Loss_Native']
         df_sat['Realized P/L'] = df_sat['Realized_PL_Active']
         df_sat = df_sat.rename(columns={
-            'Rise': 'P/L %', 
-            'Profit': 'P/L (AUD)', 
-            'Current_Price': 'Price',
-            'Avg_Price': 'Avg Price'
+            'Rise': 'P/L %', 'Profit': 'P/L (AUD)', 'Current_Price': 'Price', 'Avg_Price': 'Avg Price'
         })
 
     # --- TABLE DISPLAY ---
@@ -559,7 +718,6 @@ if not df.empty:
     st.subheader("🛰️ Satellite Fund Composition")
     if not df_sat.empty:
         cols_sat = ['Ticker', 'Shares', 'Avg Price', 'Price', 'P/L %', 'P/L (AUD)', 'Realized P/L', 'FX Tilt', 'Next Earnings', 'Market_Value_AUD', 'Distribution']
-        # Adding the 3rd argument 'Avg Price' cleanly fixes the styling KeyError!
         st.dataframe(apply_portfolio_styling(df_sat[cols_sat], 'Price', 'Avg Price'))
 
     st.subheader("🦅 US Market")
@@ -622,7 +780,6 @@ if not df.empty:
         st.caption(f"🦅 US Stocks: ${total_us_aud:,.0f}")
         st.caption(f"🛰️ Satellite: ${total_sat_aud:,.0f}")
 
-        # --- FEES SECTION ---
         st.divider()
         st.header("📉 Fees")
         
@@ -636,10 +793,8 @@ if not df.empty:
         c_fee2.metric("Annual MER", f"${total_annual_fee:,.0f}")
         st.caption("Based on Market Value & MER estimates.")
 
-        # --- BROKERAGE & REALIZED PL ---
         st.divider()
         st.metric("💸 Total Brokerage Paid", f"${total_brokerage_val:,.2f}")
-        
         st.metric("💰 Total Realized P/L", f"${total_lifetime_realized:,.2f}", help="Lifetime realized profit/loss from all sold positions.")
         st.caption("Includes fully sold positions.")
 
@@ -647,58 +802,9 @@ if not df.empty:
 st.divider()
 st.subheader("📈 Global Core Performance (1-Year Normalized)")
 
-@st.cache_data(ttl=3600*24, show_spinner=False) ) # Cache for 24 hours to save API calls
-def fetch_core_history():
-    # 1. Map the exact tickers for yfinance
-    history_map = {
-        'VUAA': 'VUAA.L',
-        'IWDA': 'IWDA.L',
-        'XUSE': 'XUSE.SW',
-        'EXCH': 'EXCH.AS',
-        'BGBL': 'BGBL.AX',
-        'VAS': 'VAS.AX',
-    }
-    
-    # Only pull history for the Core Tickers you actually own or track
-    active_core = [t for t in CORE_TICKERS if t in history_map]
-    yf_tickers = [history_map[t] for t in active_core]
-    
-    try:
-        # Download 1 year of daily closing prices
-        data = yf.download(yf_tickers, period="1mo", progress=False)
-        
-        if 'Close' in data.columns:
-            closes = data['Close']
-        else:
-            closes = data
-            
-        # Rename the columns back to your clean ticker names
-        rename_dict = {v: k for k, v in history_map.items()}
-        closes = closes.rename(columns=rename_dict)
-        
-        # Drop any empty columns
-        closes = closes.dropna(axis=1, how='all')
-        
-        # Forward-fill any missing daily data (due to different public holidays globally)
-        closes = closes.ffill()
-        
-        # 2. NORMALIZE THE DATA: Convert prices to percentage growth from Day 1
-        # Subtracting 1 and multiplying by 100 turns a 1.05 multiplier into a 5.0% return
-        normalized = ((closes / closes.iloc[0]) - 1) * 100
-        
-        # 3. Melt the dataframe so Plotly can read it easily
-        melted_df = normalized.reset_index().melt(id_vars=['Date'], var_name='Ticker', value_name='Return (%)')
-        return melted_df
-        
-    except Exception as e:
-        st.error(f"Could not load historical data: {e}")
-        return pd.DataFrame()
-
-
-    history_df = fetch_core_history()
+history_df = fetch_core_history()
 
 if not history_df.empty:
-    # Build an interactive Plotly line chart
     fig_hist = px.line(
         history_df, 
         x='Date', 
@@ -707,7 +813,6 @@ if not history_df.empty:
         color_discrete_sequence=px.colors.qualitative.Set1
     )
     
-    # Styling the chart to look like a professional terminal
     fig_hist.update_layout(
         hovermode="x unified",
         xaxis_title="",
@@ -716,9 +821,7 @@ if not history_df.empty:
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
-    # Add a bold "Zero" line so you can easily see what is up and what is down
     fig_hist.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.5)
-    
     st.plotly_chart(fig_hist, use_container_width=True)
 else:
     st.info("Core history currently unavailable.")
@@ -739,41 +842,24 @@ try:
     wish_list['Desired Price'] = wish_list['Desired Price'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
     wish_list['Desired Price'] = pd.to_numeric(wish_list['Desired Price'], errors='coerce')
         
-    actual_prices = []
-    ws_targets = []
-    year_lows = []
-    year_highs = []
-    pe_trailing = []
-    pe_forward = []
-    div_yields = []
-    peg_ratios = []
-    eps_trailing = []
-    revenue_growths = []
-    return_on_equities = []
+    actual_prices, ws_targets, year_lows, year_highs = [], [], [], []
+    pe_trailing, pe_forward, div_yields, peg_ratios = [], [], [], []
+    eps_trailing, revenue_growths, return_on_equities = [], [], []
 
-    # 2. Start the loop
     for ticker in wish_list['Ticker']:
         ticker_clean = str(ticker).strip().upper()
         
-        # --- SMARTER ROUTING ---
-        if ticker_clean in TICKER_MAP:
-            yf_ticker = TICKER_MAP[ticker_clean]
-        elif 'US_TICKERS' in globals() and ticker_clean in US_TICKERS:
-            yf_ticker = ticker_clean
-        elif '.' in ticker_clean:
-            yf_ticker = ticker_clean
-        else:
-            yf_ticker = f"{ticker_clean}.AX"
+        if ticker_clean in TICKER_MAP: yf_ticker = TICKER_MAP[ticker_clean]
+        elif 'US_TICKERS' in globals() and ticker_clean in US_TICKERS: yf_ticker = ticker_clean
+        elif '.' in ticker_clean: yf_ticker = ticker_clean
+        else: yf_ticker = f"{ticker_clean}.AX"
 
-        # Set safe default values
         p_actual, p_low, p_high, p_target = None, None, None, None
         p_pe_t, p_pe_f, p_yield = None, None, None
         p_peg, p_eps_t, p_rev_growth, p_roe = None, None, None, None
 
         try:
             stock = yf.Ticker(yf_ticker)
-            
-            # --- PRICES (Isolated) ---
             try: p_actual = float(stock.fast_info['last_price'])
             except: pass
             try: p_low = float(stock.fast_info['year_low'])
@@ -781,7 +867,6 @@ try:
             try: p_high = float(stock.fast_info['year_high'])
             except: pass
             
-            # --- FUNDAMENTALS (Safely structured) ---
             try:
                 info = stock.info
                 if isinstance(info, dict):
@@ -790,10 +875,8 @@ try:
                     p_pe_f = info.get('forwardPE')
                     p_eps_t = info.get('trailingEps')
                     
-                    # Safe PEG fetch
                     p_peg = info.get('trailingPegRatio')
-                    if p_peg is None:
-                        p_peg = info.get('pegRatio')
+                    if p_peg is None: p_peg = info.get('pegRatio')
                     
                     raw_yield = info.get('dividendYield')
                     p_yield = raw_yield * 100 if raw_yield else None
@@ -803,24 +886,13 @@ try:
                     
                     raw_roe = info.get('returnOnEquity')
                     p_roe = raw_roe * 100 if raw_roe else None
-            except: 
-                pass # Info dict failed
-                
-        except:
-            pass # The whole ticker failed
+            except: pass
+        except: pass
 
-        # 3. Append to lists exactly ONCE per ticker
-        actual_prices.append(p_actual)
-        year_lows.append(p_low)
-        year_highs.append(p_high)
-        ws_targets.append(p_target)
-        pe_trailing.append(p_pe_t)
-        pe_forward.append(p_pe_f)
-        div_yields.append(p_yield)
-        peg_ratios.append(p_peg)
-        eps_trailing.append(p_eps_t)
-        revenue_growths.append(p_rev_growth)
-        return_on_equities.append(p_roe)
+        actual_prices.append(p_actual); year_lows.append(p_low); year_highs.append(p_high)
+        ws_targets.append(p_target); pe_trailing.append(p_pe_t); pe_forward.append(p_pe_f)
+        div_yields.append(p_yield); peg_ratios.append(p_peg); eps_trailing.append(p_eps_t)
+        revenue_growths.append(p_rev_growth); return_on_equities.append(p_roe)
             
     wish_list['Actual Price'] = actual_prices
     wish_list['WS Target'] = ws_targets
@@ -836,7 +908,6 @@ try:
 
     wish_list['% Diff'] = (wish_list['Actual Price'] - wish_list['Desired Price']) / wish_list['Desired Price']
 
-    # ---> NEW FIX: Force columns to numeric to prevent styling crashes <---
     num_cols = ['Actual Price', 'Desired Price', '% Diff', 'WS Target', '52W Low', '52W High', 'Trailing P/E', 'Forward P/E', 'Yield']
     for col in num_cols:
         wish_list[col] = pd.to_numeric(wish_list[col], errors='coerce')
@@ -848,7 +919,6 @@ try:
         actual = row['Actual Price']
         desired = row['Desired Price']
         
-        # 1. Price vs Desired Price Logic
         if pd.notna(actual) and pd.notna(desired):
             price_col_idx = row.index.get_loc('Actual Price')
             diff_col_idx = row.index.get_loc('% Diff')
@@ -860,58 +930,27 @@ try:
             styles[price_col_idx] = f'color: {color}; font-weight: bold;'
             styles[diff_col_idx] = f'color: {color}; font-weight: bold;'
             
-        # 2. PEG Ratio (Value/Growth)
         if 'PEG Ratio' in row.index:
             peg_val = row['PEG Ratio']
             if pd.notna(peg_val) and isinstance(peg_val, (int, float)) and 0 < peg_val <= 1.5:
-                peg_idx = row.index.get_loc('PEG Ratio')
-                styles[peg_idx] = 'color: #00FF00; font-weight: bold;'
+                styles[row.index.get_loc('PEG Ratio')] = 'color: #00FF00; font-weight: bold;'
                 
-        # 3. Return on Equity (Health) - Green if > 15%
         if 'ROE' in row.index:
             roe_val = row['ROE']
             if pd.notna(roe_val) and isinstance(roe_val, (int, float)) and roe_val > 15.0:
-                roe_idx = row.index.get_loc('ROE')
-                styles[roe_idx] = 'color: #00FF00; font-weight: bold;'
+                styles[row.index.get_loc('ROE')] = 'color: #00FF00; font-weight: bold;'
 
-        # 4. Revenue Growth (Prospects) - Green if > 10%
         if 'Rev Growth' in row.index:
             rev_val = row['Rev Growth']
             if pd.notna(rev_val) and isinstance(rev_val, (int, float)) and rev_val > 10.0:
-                rev_idx = row.index.get_loc('Rev Growth')
-                styles[rev_idx] = 'color: #00FF00; font-weight: bold;'
+                styles[row.index.get_loc('Rev Growth')] = 'color: #00FF00; font-weight: bold;'
                 
-        # 5. EPS (Health) - Green if positive
         if 'EPS (TTM)' in row.index:
             eps_val = row['EPS (TTM)']
             if pd.notna(eps_val) and isinstance(eps_val, (int, float)):
                 eps_idx = row.index.get_loc('EPS (TTM)')
-                if eps_val > 0:
-                    styles[eps_idx] = 'color: #00FF00; font-weight: bold;'
-                else:
-                    styles[eps_idx] = 'color: #FF0000; font-weight: bold;' # Red if company is losing money
-                
-        return styles
-        
-        # 1. Price vs Desired Price Logic
-        if pd.notna(actual) and pd.notna(desired):
-            price_col_idx = row.index.get_loc('Actual Price')
-            diff_col_idx = row.index.get_loc('% Diff')
-            
-            if actual <= desired: color = '#00FF00'
-            elif actual <= (desired * 1.02): color = '#FFA500'
-            else: color = '#FF0000'
-                
-            styles[price_col_idx] = f'color: {color}; font-weight: bold;'
-            styles[diff_col_idx] = f'color: {color}; font-weight: bold;'
-            
-        # 2. PEG Ratio Undervalued Logic (Green if between 0 and 1.0)
-        if 'PEG Ratio' in row.index:
-            peg_val = row['PEG Ratio']
-            # Make sure it's a valid number and hits our undervalued criteria
-            if pd.notna(peg_val) and isinstance(peg_val, (int, float)) and 0 < peg_val <= 1.0:
-                peg_idx = row.index.get_loc('PEG Ratio')
-                styles[peg_idx] = 'color: #00FF00; font-weight: bold;'
+                if eps_val > 0: styles[eps_idx] = 'color: #00FF00; font-weight: bold;'
+                else: styles[eps_idx] = 'color: #FF0000; font-weight: bold;' 
                 
         return styles
 
@@ -919,123 +958,27 @@ try:
         wish_list.style
         .apply(style_shopping_list, axis=1)
         .format({
-            '% Diff': '{:+.2%}', 
-            'Actual Price': '${:.2f}', 
-            'Desired Price': '${:.2f}',
-            'WS Target': '${:.2f}',
-            '52W Low': '${:.2f}',
-            '52W High': '${:.2f}',
-            'Trailing P/E': '{:.1f}',
-            'Forward P/E': '{:.1f}',
-            'Yield': '{:.0f}%',        # Cut to whole number
-            'PEG Ratio': '{:.2f}',
-            'EPS (TTM)': '${:.2f}',    # Two decimal points
-            'Rev Growth': '{:.2f}%',   # Two decimal points
-            'ROE': '{:.2f}%'           # Two decimal points
+            '% Diff': '{:+.2%}', 'Actual Price': '${:.2f}', 'Desired Price': '${:.2f}',
+            'WS Target': '${:.2f}', '52W Low': '${:.2f}', '52W High': '${:.2f}',
+            'Trailing P/E': '{:.1f}', 'Forward P/E': '{:.1f}', 'Yield': '{:.0f}%',        
+            'PEG Ratio': '{:.2f}', 'EPS (TTM)': '${:.2f}', 'Rev Growth': '{:.2f}%', 'ROE': '{:.2f}%'
         }, na_rep="-")
     )
-    
     st.dataframe(styled_wish_list, use_container_width=True)
 
 except FileNotFoundError:
     st.warning("Could not find 'Wish list.csv'. Please make sure it is saved in the exact same folder as your script.")
 
 # ---> SECTION: ASX 200 BARGAIN SCANNER <---
-
 st.subheader("📉 ASX 200 Daily Losers (Bargain Scanner)")
 
-@st.cache_data(ttl=3600, show_spinner=False) 
-def get_asx_losers_v2(): # <--- Renamed to bust cache
-    try:
-        import requests
-        
-        url = 'https://en.wikipedia.org/wiki/S%26P/ASX_200'
-        header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        req = requests.get(url, headers=header)
-        tables = pd.read_html(req.text)
-        
-        df_asx200 = None
-        for table in tables:
-            if 'Code' in table.columns and 'Company' in table.columns:
-                df_asx200 = table
-                break
-                
-        if df_asx200 is None: return pd.DataFrame()
-        
-        tickers = df_asx200['Code'].astype(str) + '.AX'
-        ticker_list = tickers.tolist()
-
-        data = yf.download(ticker_list, period="5d", progress=False)
-        if 'Close' in data.columns: data = data['Close']
-        if data.empty or len(data) < 2: return pd.DataFrame()
-        
-        recent_data = data.iloc[-2:] 
-        pct_change = ((recent_data.iloc[1] - recent_data.iloc[0]) / recent_data.iloc[0]) * 100
-        
-        losers = pct_change.sort_values().head(10)
-        
-        year_lows, year_highs = [], []
-        pegs, roes, eps_ttm, rev_growths = [], [], [], []
-        pe_trailing, pe_forward = [], [] # <--- New Lists
-        
-        for t in losers.index:
-            stock = yf.Ticker(t)
-            try: year_lows.append(stock.fast_info['year_low'])
-            except: year_lows.append(None)
-                
-            try: year_highs.append(stock.fast_info['year_high'])
-            except: year_highs.append(None)
-            
-            try:
-                info = stock.info
-                pegs.append(info.get('trailingPegRatio') or info.get('pegRatio'))
-                roes.append((info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None)
-                eps_ttm.append(info.get('trailingEps'))
-                rev_growths.append((info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None)
-                
-                # Fetching P/E Ratios
-                pe_trailing.append(info.get('trailingPE'))
-                pe_forward.append(info.get('forwardPE'))
-            except:
-                pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
-                pe_trailing.append(None); pe_forward.append(None)
-            
-        last_prices = recent_data.iloc[1][losers.index].values
-        
-        above_52w_low = []
-        for lp, yl in zip(last_prices, year_lows):
-            if pd.notna(lp) and pd.notna(yl) and yl > 0: above_52w_low.append(((lp - yl) / yl) * 100)
-            else: above_52w_low.append(None)
-        
-        losers_df = pd.DataFrame({
-            'Ticker': losers.index.str.replace('.AX', '', regex=False),
-            'Company': df_asx200.set_index('Code').loc[losers.index.str.replace('.AX', '', regex=False)]['Company'].values,
-            'Drop %': losers.values,
-            'Last Price': last_prices,
-            'Above 52W Low': above_52w_low,
-            'Trailing P/E': pe_trailing, # <--- Added to dataframe
-            'Forward P/E': pe_forward,   # <--- Added to dataframe
-            'PEG Ratio': pegs,
-            'ROE': roes,
-            'EPS': eps_ttm,
-            'Rev Growth': rev_growths
-        })
-        return losers_df
-        
-    except Exception as e:
-        st.error(f"Bargain Scanner Error: {e}")
-        return pd.DataFrame()
-
-
-    losers_df = get_asx_losers_v2()
+losers_df = get_asx_losers_v2()
 
 if not losers_df.empty:
     def style_bargain_scanner(row):
         styles = [''] * len(row)
-        
         if 'Drop %' in row.index:
-            drop_idx = row.index.get_loc('Drop %')
-            styles[drop_idx] = 'color: #c62828; font-weight: bold;'
+            styles[row.index.get_loc('Drop %')] = 'color: #c62828; font-weight: bold;'
             
         if 'Above 52W Low' in row.index:
             above_val = row['Above 52W Low']
@@ -1043,16 +986,13 @@ if not losers_df.empty:
                 styles[row.index.get_loc('Above 52W Low')] = 'color: #00FF00; font-weight: bold;'
                 styles[row.index.get_loc('Last Price')] = 'color: #00FF00; font-weight: bold;'
 
-        # --- NEW: P/E Ratio Highlighting ---
         if 'Trailing P/E' in row.index and 'Forward P/E' in row.index:
             t_pe = row['Trailing P/E']
             f_pe = row['Forward P/E']
-            # If Forward P/E is lower than Trailing P/E (and both are positive)
             if pd.notna(t_pe) and pd.notna(f_pe) and t_pe > 0 and f_pe > 0 and f_pe < t_pe:
                 styles[row.index.get_loc('Trailing P/E')] = 'color: #00FF00; font-weight: bold;'
                 styles[row.index.get_loc('Forward P/E')] = 'color: #00FF00; font-weight: bold;'
 
-        # Fundamental Highlighting
         if 'PEG Ratio' in row.index and pd.notna(row['PEG Ratio']) and 0 < row['PEG Ratio'] <= 1.5:
             styles[row.index.get_loc('PEG Ratio')] = 'color: #00FF00; font-weight: bold;'
             
@@ -1071,99 +1011,18 @@ if not losers_df.empty:
     styled_losers = (
         losers_df.style.apply(style_bargain_scanner, axis=1).format({
             'Drop %': '{:.2f}%', 'Last Price': '${:.2f}', 'Above 52W Low': '+{:.2f}%',
-            'Trailing P/E': '{:.1f}', 'Forward P/E': '{:.1f}', # <--- Formatted to 1 decimal place
+            'Trailing P/E': '{:.1f}', 'Forward P/E': '{:.1f}', 
             'PEG Ratio': '{:.2f}', 'ROE': '{:.2f}%', 'EPS': '${:.2f}', 'Rev Growth': '{:.2f}%'
         }, na_rep="-")
     )
     st.dataframe(styled_losers, hide_index=True, use_container_width=True)
 else:
     st.info("Market scanner currently unavailable.")
-# ---> END NEW SECTION <---
-
-# ---> SECTION: ASX 200 BOTTOM DRIFTERS <---
 
 # ---> SECTION: ASX 200 BOTTOM DRIFTERS <---
 st.subheader("⚓ ASX 200 Bottom Drifters (Near 52W Low)")
 
-@st.cache_data(ttl=3600, show_spinner=False) 
-def get_asx_bottom_drifters_v3(force_refresh=True): # <--- Added parameter to break cache
-    try:
-        import requests
-        import datetime
-        
-        url = 'https://en.wikipedia.org/wiki/S%26P/ASX_200'
-        header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        req = requests.get(url, headers=header)
-        tables = pd.read_html(req.text)
-        
-        df_asx200 = None
-        for table in tables:
-            if 'Code' in table.columns and 'Company' in table.columns:
-                df_asx200 = table
-                break
-                
-        if df_asx200 is None: return pd.DataFrame()
-        
-        tickers = df_asx200['Code'].astype(str) + '.AX'
-        data = yf.download(tickers.tolist(), period="1y", progress=False)
-        if data.empty: return pd.DataFrame()
-        
-        closes, lows, highs = data['Close'], data['Low'], data['High']
-        current_prices, year_lows, year_highs = closes.iloc[-1], lows.min(), highs.max()
-        
-        distance_to_low = ((current_prices - year_lows) / year_lows) * 100
-        bottom_10 = distance_to_low.sort_values().head(10)
-        
-        earnings_dates, pegs, roes, eps_ttm, rev_growths = [], [], [], [], []
-        pe_trailing, pe_forward = [], [] 
-        
-        for t in bottom_10.index:
-            stock = yf.Ticker(t)
-            
-            try:
-                cal = stock.calendar
-                if cal is not None and 'Earnings Date' in cal and len(cal['Earnings Date']) > 0:
-                    earnings_dates.append(cal['Earnings Date'][0].date())
-                else: 
-                    earnings_dates.append(None)
-            except:
-                earnings_dates.append(None)
-            
-            try:
-                info = stock.info
-                pegs.append(info.get('trailingPegRatio') or info.get('pegRatio'))
-                roes.append((info.get('returnOnEquity') * 100) if info.get('returnOnEquity') else None)
-                eps_ttm.append(info.get('trailingEps'))
-                rev_growths.append((info.get('revenueGrowth') * 100) if info.get('revenueGrowth') else None)
-                
-                # Fetching P/E Ratios
-                pe_trailing.append(info.get('trailingPE'))
-                pe_forward.append(info.get('forwardPE'))
-            except Exception as e:
-                pegs.append(None); roes.append(None); eps_ttm.append(None); rev_growths.append(None)
-                pe_trailing.append(None); pe_forward.append(None)
-        
-        drifters_df = pd.DataFrame({
-            'Ticker': bottom_10.index.str.replace('.AX', '', regex=False),
-            'Company': df_asx200.set_index('Code').loc[bottom_10.index.str.replace('.AX', '', regex=False)]['Company'].values,
-            'Above 52W Low': bottom_10.values,
-            'Last Price': current_prices[bottom_10.index].values,
-            'Trailing P/E': pe_trailing, 
-            'Forward P/E': pe_forward,   
-            'PEG Ratio': pegs,
-            'ROE': roes,
-            'EPS': eps_ttm,
-            'Rev Growth': rev_growths,
-            'Next Earnings': earnings_dates
-        })
-        return drifters_df
-        
-    except Exception as e:
-        st.error(f"Bottom Drifters Error: {e}")
-        return pd.DataFrame()
-
-
-    drifters_df = get_asx_bottom_drifters_v3(force_refresh=True) # <--- Passed parameter
+drifters_df = get_asx_bottom_drifters_v3(force_refresh=True) 
 
 if not drifters_df.empty:
     import datetime
@@ -1179,7 +1038,6 @@ if not drifters_df.empty:
                 if 0 <= (earn_val - datetime.date.today()).days <= 7:
                     styles[row.index.get_loc('Next Earnings')] = 'background-color: #c62828; color: white; font-weight: bold;'
 
-        # --- NEW: P/E Ratio Highlighting ---
         if 'Trailing P/E' in row.index and 'Forward P/E' in row.index:
             t_pe = row['Trailing P/E']
             f_pe = row['Forward P/E']
@@ -1187,7 +1045,6 @@ if not drifters_df.empty:
                 styles[row.index.get_loc('Trailing P/E')] = 'color: #00FF00; font-weight: bold;'
                 styles[row.index.get_loc('Forward P/E')] = 'color: #00FF00; font-weight: bold;'
 
-        # Fundamental Highlighting
         if 'PEG Ratio' in row.index and pd.notna(row['PEG Ratio']) and 0 < row['PEG Ratio'] <= 1.5:
             styles[row.index.get_loc('PEG Ratio')] = 'color: #00FF00; font-weight: bold;'
             
@@ -1213,48 +1070,7 @@ if not drifters_df.empty:
     st.dataframe(styled_drifters, hide_index=True, use_container_width=True)
 else:
     st.info("Bottom drifter scanner currently unavailable.")
-# ---> END NEW SECTION <---
 
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
