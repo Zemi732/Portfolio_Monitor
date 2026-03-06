@@ -466,11 +466,10 @@ df, total_brokerage_val, total_lifetime_realized = load_data()
 if not df.empty:
     # 1. Fetch live prices & FX rates
     ticker_list = df['Ticker'].tolist()
-    with st.spinner('Fetching market prices...'):
-        current_prices, fx_multipliers = fetch_market_data(ticker_list)
     
-    with st.spinner('Checking earnings calendars...'):
-        earnings_dates = fetch_earnings_dates(ticker_list)
+    # Just call the functions directly without the spinner blocks!
+    current_prices, fx_multipliers = fetch_market_data(ticker_list)
+    earnings_dates = fetch_earnings_dates(ticker_list)
 
     api_missing_tickers = [t for t, p in current_prices.items() if p <= 0]
     if "manual_prices_storage" not in st.session_state: st.session_state["manual_prices_storage"] = {}
@@ -740,7 +739,7 @@ def fetch_core_history():
         st.error(f"Could not load historical data: {e}")
         return pd.DataFrame()
 
-with st.spinner("Fetching historical core performance..."):
+
     history_df = fetch_core_history()
 
 if not history_df.empty:
@@ -1072,7 +1071,7 @@ def get_asx_losers_v2(): # <--- Renamed to bust cache
         st.error(f"Bargain Scanner Error: {e}")
         return pd.DataFrame()
 
-with st.spinner('Scanning ASX 200 for bargains...'):
+
     losers_df = get_asx_losers_v2()
 
 if not losers_df.empty:
@@ -1208,7 +1207,7 @@ def get_asx_bottom_drifters_v3(force_refresh=True): # <--- Added parameter to br
         st.error(f"Bottom Drifters Error: {e}")
         return pd.DataFrame()
 
-with st.spinner('Scanning for bottom drifters...'):
+
     drifters_df = get_asx_bottom_drifters_v3(force_refresh=True) # <--- Passed parameter
 
 if not drifters_df.empty:
@@ -1264,6 +1263,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
