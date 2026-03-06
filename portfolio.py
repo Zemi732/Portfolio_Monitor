@@ -28,51 +28,7 @@ MER_RATES = {
 # ==========================================
 
 
-# ---> NEW SECTION: VIX VOLATILITY TRACKER (SIDEBAR) <---
-st.sidebar.divider()
-st.sidebar.subheader("🚨 Market Sentiment")
 
-def get_vix_data():
-    try:
-        import yfinance as yf
-        vix = yf.Ticker("^VIX")
-        
-        # Grab current price and yesterday's close to calculate the daily swing
-        current_price = vix.fast_info['last_price']
-        prev_close = vix.fast_info['previous_close']
-        
-        # Calculate the percentage change
-        pct_change = ((current_price - prev_close) / prev_close) * 100
-        
-        return current_price, pct_change
-    except Exception as e:
-        return None, None
-
-with st.sidebar:
-    vix_price, vix_change = get_vix_data()
-    
-    if vix_price is not None:
-        # delta_color="inverse" makes a negative drop turn GREEN (market is calming down)
-        # and a positive spike turn RED (market is panicking)
-        st.metric(
-            label="VIX (Fear Gauge)", 
-            value=f"{vix_price:.2f}", 
-            delta=f"{vix_change:+.2f}%",
-            delta_color="inverse" 
-        )
-        
-        # Add a little context text depending on the level
-        if vix_price > 30:
-            st.caption("🔴 High Fear: Extreme market stress.")
-        elif vix_price > 20:
-            st.caption("🟡 Elevated: Market is highly cautious.")
-        else:
-            st.caption("🟢 Calm: Normal market conditions.")
-            
-    else:
-        st.sidebar.info("VIX data currently unavailable.")
-with st.sidebar:
-    st.header("Global Settings")
 
     @st.cache_data(ttl=300, show_spinner=False) 
     def get_exchange_rates():
@@ -1262,6 +1218,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
