@@ -365,7 +365,7 @@ TICKER_MAP = {
     "IWDA": "IWDA.L" 
 }
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_market_data(ticker_list):
     prices = {}
     fx_multipliers = {}
@@ -1331,6 +1331,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
