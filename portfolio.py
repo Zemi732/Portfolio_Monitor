@@ -399,8 +399,6 @@ if macro_data:
         delta=f"{vix['change']:.2f}",
         delta_color="inverse" # A rising VIX is bearish, making a positive change red
     )
-
-st.sidebar.markdown("---") # Optional divider before Futures
     
     # ---> PRE-MARKET FUTURES TRACKER <---
     st.subheader("🔮 Pre-Market Futures")
@@ -1130,5 +1128,6 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
