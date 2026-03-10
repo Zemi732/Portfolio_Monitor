@@ -221,6 +221,28 @@ def get_asx_losers_v2():
     except Exception as e:
         return pd.DataFrame()
 
+@st.cache_data(show_spinner=False, ttl=900)
+def fetch_macro_indicators():
+    # Tickers for Crude (WTI), 10-Yr Yield, and VIX
+    tickers = {"Crude Oil (WTI)": "CL=F", "10-Yr Yield": "^TNX", "VIX": "^VIX"}
+    data = {}
+    
+    for name, ticker in tickers.items():
+        try:
+            # Grab the last 2 days to calculate the daily change
+            hist = yf.Ticker(ticker).history(period="2d")
+            if len(hist) >= 2:
+                current = hist['Close'].iloc[-1]
+                previous = hist['Close'].iloc[-2]
+                change = current - previous
+                data[name] = {"current": current, "change": change}
+            else:
+                data[name] = {"current": hist['Close'].iloc[-1], "change": 0.0}
+        except Exception:
+            data[name] = {"current": 0.0, "change": 0.0}
+            
+    return data
+
 @st.cache_data(ttl=3600, show_spinner=False) 
 def get_asx_bottom_drifters_v3(force_refresh=True): 
     try:
@@ -345,6 +367,40 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     st.divider()
+
+    # --- Put this between FX and Futures in your sidebar ---
+
+st.sidebar.markdown("### Macro Indicators")
+macro_data = fetch_macro_indicators()
+
+if macro_data:
+    # Crude Oil
+    oil = macro_data.get("Crude Oil (WTI)")
+    st.sidebar.metric(
+        label="Crude Oil (WTI)", 
+        value=f"${oil['current']:.2f}", 
+        delta=f"{oil['change']:.2f}"
+    )
+
+    # 10-Year Treasury Yield
+    tnx = macro_data.get("10-Yr Yield")
+    st.sidebar.metric(
+        label="10-Yr Treasury Yield", 
+        value=f"{tnx['current']:.2f}%", 
+        delta=f"{tnx['change']:.2f}",
+        delta_color="inverse" # A rising yield is usually bearish for stocks, so this makes a positive change red
+    )
+
+    # VIX
+    vix = macro_data.get("VIX")
+    st.sidebar.metric(
+        label="VIX (Volatility)", 
+        value=f"{vix['current']:.2f}", 
+        delta=f"{vix['change']:.2f}",
+        delta_color="inverse" # A rising VIX is bearish, making a positive change red
+    )
+
+st.sidebar.markdown("---") # Optional divider before Futures
     
     # ---> PRE-MARKET FUTURES TRACKER <---
     st.subheader("🔮 Pre-Market Futures")
@@ -1074,4 +1130,5 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
