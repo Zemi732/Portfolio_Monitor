@@ -399,24 +399,7 @@ if macro_data:
         delta=f"{vix['change']:.2f}",
         delta_color="inverse" # A rising VIX is bearish, making a positive change red
     )
-    
-    # ---> PRE-MARKET FUTURES TRACKER <---
-    st.subheader("🔮 Pre-Market Futures")
-    es_p, es_change, yir_p, yir_change = get_futures_data()
-    
-    if es_p is not None:
-        c_fut1, c_fut2 = st.columns(2)
-        c_fut1.metric(label="S&P 500", value=f"{es_p:,.0f}", delta=f"{es_change:+.2f}%")
-        c_fut2.metric(label="ASX 200", value=f"{yir_p:,.0f}", delta=f"{yir_change:+.2f}%")
         
-        if es_change > 0.4: st.caption("🟢 Strong US Open Expected")
-        elif es_change < -0.4: st.caption("🔴 Weak US Open Expected")
-        else: st.caption("🟡 Flat/Neutral Open Expected")
-    else:
-        st.info("Futures data currently unavailable.")
-    
-    st.divider()
-    
     if st.button("🔄 Refresh Prices"):
         st.cache_data.clear()
         st.rerun()
@@ -1128,6 +1111,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
