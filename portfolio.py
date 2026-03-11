@@ -692,8 +692,7 @@ if not df.empty:
     
     for ticker, manual_price in MANUAL_PRICES.items():
         # Check if the ticker from our manual list is in the downloaded prices
-        if ticker in current_prices: 
-            current_prices[ticker] = manual_price
+        current_prices[ticker] = manual_price
             
     earnings_dates = fetch_earnings_dates(ticker_list)
 
@@ -1171,6 +1170,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
