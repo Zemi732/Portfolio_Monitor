@@ -399,36 +399,35 @@ with st.sidebar:
     # --- Put this between FX and Futures in your sidebar ---
 
     st.sidebar.markdown("### Macro Indicators")
-macro_data = fetch_macro_indicators()
+    macro_data = fetch_macro_indicators()
 
-if macro_data:
-    # Crude Oil
-    oil = macro_data.get("Crude Oil (WTI)")
-    st.sidebar.metric(
-        label="Crude Oil (WTI)", 
-        value=f"${oil['current']:.2f}", 
-        delta=f"{oil['change_pct']:.2f}%"  # Updated key and added % symbol
-    )
+    if macro_data:
+        # Crude Oil
+        oil = macro_data.get("Crude Oil (WTI)")
+        st.sidebar.metric(
+            label="Crude Oil (WTI)", 
+            value=f"${oil['current']:.2f}", 
+            delta=f"{oil['change_pct']:.2f}%"  # Updated key and added % symbol
+        )
+    
+        # 10-Year Treasury Yield
+        tnx = macro_data.get("10-Yr Yield")
+        st.sidebar.metric(
+            label="10-Yr Treasury Yield", 
+            value=f"{tnx['current']:.2f}%", 
+            delta=f"{tnx['change_pct']:.2f}%", # Updated key and added % symbol
+            delta_color="inverse" 
+        )
 
-    # 10-Year Treasury Yield
-    tnx = macro_data.get("10-Yr Yield")
-    st.sidebar.metric(
-        label="10-Yr Treasury Yield", 
-        value=f"{tnx['current']:.2f}%", 
-        delta=f"{tnx['change_pct']:.2f}%", # Updated key and added % symbol
-        delta_color="inverse" 
-    )
+        # VIX
+        vix = macro_data.get("VIX")
+        st.sidebar.metric(
+            label="VIX (Volatility)", 
+            value=f"{vix['current']:.2f}", 
+            delta=f"{vix['change_pct']:.2f}%", # Updated key and added % symbol
+            delta_color="inverse" 
+        )
 
-    # VIX
-    vix = macro_data.get("VIX")
-    st.sidebar.metric(
-        label="VIX (Volatility)", 
-        value=f"{vix['current']:.2f}", 
-        delta=f"{vix['change_pct']:.2f}%", # Updated key and added % symbol
-        delta_color="inverse" 
-    )
-
-st.sidebar.markdown("---")
         
     if st.button("🔄 Refresh Prices"):
         st.cache_data.clear()
@@ -1163,6 +1162,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
