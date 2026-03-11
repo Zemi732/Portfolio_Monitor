@@ -407,7 +407,7 @@ if macro_data:
     st.sidebar.metric(
         label="Crude Oil (WTI)", 
         value=f"${oil['current']:.2f}", 
-        delta=f"{oil['change']:.2f}"
+        delta=f"{oil['change_pct']:.2f}%"  # Updated key and added % symbol
     )
 
     # 10-Year Treasury Yield
@@ -415,8 +415,8 @@ if macro_data:
     st.sidebar.metric(
         label="10-Yr Treasury Yield", 
         value=f"{tnx['current']:.2f}%", 
-        delta=f"{tnx['change']:.2f}",
-        delta_color="inverse" # A rising yield is usually bearish for stocks, so this makes a positive change red
+        delta=f"{tnx['change_pct']:.2f}%", # Updated key and added % symbol
+        delta_color="inverse" 
     )
 
     # VIX
@@ -424,9 +424,11 @@ if macro_data:
     st.sidebar.metric(
         label="VIX (Volatility)", 
         value=f"{vix['current']:.2f}", 
-        delta=f"{vix['change']:.2f}",
-        delta_color="inverse" # A rising VIX is bearish, making a positive change red
+        delta=f"{vix['change_pct']:.2f}%", # Updated key and added % symbol
+        delta_color="inverse" 
     )
+
+st.sidebar.markdown("---")
         
     if st.button("🔄 Refresh Prices"):
         st.cache_data.clear()
@@ -1161,6 +1163,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
