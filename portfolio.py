@@ -222,6 +222,31 @@ def get_asx_losers_v2():
         return pd.DataFrame()
 
 @st.cache_data(show_spinner=False, ttl=900)
+def fetch_mining_indicators():
+    # HG=F is Copper Futures, URA is the Global X Uranium ETF proxy
+    tickers = {"Copper (Comex)": "HG=F", "Uranium ETF (URA)": "URA"}
+    data = {}
+    
+    for name, ticker in tickers.items():
+        try:
+            hist = yf.Ticker(ticker).history(period="2d")
+            if len(hist) >= 2:
+                current = hist['Close'].iloc[-1]
+                previous = hist['Close'].iloc[-2]
+                
+                # Calculate the percentage change
+                change_pct = ((current - previous) / previous) * 100 
+                
+                data[name] = {"current": current, "change_pct": change_pct}
+            else:
+                # Fallback if only 1 day of data is available
+                data[name] = {"current": hist['Close'].iloc[-1], "change_pct": 0.0}
+        except Exception:
+            data[name] = {"current": 0.0, "change_pct": 0.0}
+            
+    return data
+
+@st.cache_data(show_spinner=False, ttl=900)
 def fetch_macro_indicators():
     # Tickers for Crude (WTI), 10-Yr Yield, and VIX
     tickers = {"Crude Oil (WTI)": "CL=F", "10-Yr Yield": "^TNX", "VIX": "^VIX"}
@@ -234,12 +259,15 @@ def fetch_macro_indicators():
             if len(hist) >= 2:
                 current = hist['Close'].iloc[-1]
                 previous = hist['Close'].iloc[-2]
-                change = current - previous
-                data[name] = {"current": current, "change": change}
+                
+                # Calculate the percentage change
+                change_pct = ((current - previous) / previous) * 100 
+                
+                data[name] = {"current": current, "change_pct": change_pct}
             else:
-                data[name] = {"current": hist['Close'].iloc[-1], "change": 0.0}
+                data[name] = {"current": hist['Close'].iloc[-1], "change_pct": 0.0}
         except Exception:
-            data[name] = {"current": 0.0, "change": 0.0}
+            data[name] = {"current": 0.0, "change_pct": 0.0}
             
     return data
 
@@ -403,7 +431,29 @@ if macro_data:
     if st.button("🔄 Refresh Prices"):
         st.cache_data.clear()
         st.rerun()
+# --- Put this right below your Macro Indicators ---
 
+st.sidebar.markdown("### Metals & Mining")
+mining_data = fetch_mining_indicators()
+
+if mining_data:
+    # Copper
+    copper = mining_data.get("Copper (Comex)")
+    st.sidebar.metric(
+        label="Copper Futures (HG)", 
+        value=f"${copper['current']:.2f}", 
+        delta=f"{copper['change_pct']:.2f}%"
+    )
+
+    # Uranium (URA)
+    uranium = mining_data.get("Uranium ETF (URA)")
+    st.sidebar.metric(
+        label="Uranium Proxy (URA)", 
+        value=f"${uranium['current']:.2f}", 
+        delta=f"{uranium['change_pct']:.2f}%"
+    )
+
+st.sidebar.markdown("---") # Optional divider
 # ==========================================
 # 2. MAIN PAGE: DATA LOADING & LOGIC
 # ==========================================
@@ -1111,6 +1161,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
