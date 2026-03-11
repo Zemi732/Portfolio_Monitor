@@ -689,16 +689,21 @@ if not df.empty:
     # 1. Fetch live prices & FX rates natively (NO SPINNERS)
     ticker_list = df['Ticker'].tolist()
     current_prices, fx_multipliers = fetch_market_data(ticker_list)
+    
     for ticker, manual_price in MANUAL_PRICES.items():
-    # Check if the ticker from our manual list is in the downloaded prices
-    if ticker in current_prices: 
-        current_prices[ticker] = manual_price
+        # Check if the ticker from our manual list is in the downloaded prices
+        if ticker in current_prices: 
+            current_prices[ticker] = manual_price
+            
     earnings_dates = fetch_earnings_dates(ticker_list)
 
     api_missing_tickers = [t for t, p in current_prices.items() if p <= 0]
-    if "manual_prices_storage" not in st.session_state: st.session_state["manual_prices_storage"] = {}
+    if "manual_prices_storage" not in st.session_state: 
+        st.session_state["manual_prices_storage"] = {}
+        
     for t in api_missing_tickers:
-        if t in st.session_state["manual_prices_storage"]: current_prices[t] = st.session_state["manual_prices_storage"][t]
+        if t in st.session_state["manual_prices_storage"]: 
+            current_prices[t] = st.session_state["manual_prices_storage"][t]
 
     # 2. Map standard data
     df['Current_Price'] = df['Ticker'].map(current_prices)
@@ -1166,6 +1171,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
