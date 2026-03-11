@@ -689,6 +689,10 @@ if not df.empty:
     # 1. Fetch live prices & FX rates natively (NO SPINNERS)
     ticker_list = df['Ticker'].tolist()
     current_prices, fx_multipliers = fetch_market_data(ticker_list)
+    for ticker, manual_price in MANUAL_PRICES.items():
+    # Check if the ticker from our manual list is in the downloaded prices
+    if ticker in current_prices: 
+        current_prices[ticker] = manual_price
     earnings_dates = fetch_earnings_dates(ticker_list)
 
     api_missing_tickers = [t for t, p in current_prices.items() if p <= 0]
@@ -1162,6 +1166,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
