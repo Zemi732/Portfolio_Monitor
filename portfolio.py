@@ -427,11 +427,10 @@ with st.sidebar:
             delta=f"{vix['change_pct']:.2f}%", # Updated key and added % symbol
             delta_color="inverse" 
         )
-
-        
-    if st.button("🔄 Refresh Prices"):
-        st.cache_data.clear()
-        st.rerun()
+ 
+if st.button("🔄 Refresh Prices"):
+     st.cache_data.clear()
+     st.rerun()
 # --- Put this right below your Macro Indicators ---
 
 st.sidebar.markdown("### Metals & Mining")
@@ -1170,6 +1169,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
