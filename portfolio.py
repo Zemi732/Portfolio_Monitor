@@ -704,14 +704,7 @@ if not df.empty:
             current_prices[t] = st.session_state["manual_prices_storage"][t]
 
     # 2. Map standard data
-    df['Current_Price'] = df['Ticker'].map(current_prices)
-    # --- TEMPORARY X-RAY DEBUGGER ---
-    st.error("🚨 DEBUGGING MODE ACTIVE")
-    st.write("Here is the exact spelling in your file vs the mapped price:")
-    st.dataframe(df[['Ticker', 'Current_Price']])
-    st.stop() # This halts the app right here so we can read the table
-    # --------------------------------
-    
+    df['Current_Price'] = df['Ticker'].map(current_prices)   
     df['FX Rate'] = df['Ticker'].map(fx_multipliers)
     df['Next Earnings'] = df['Ticker'].map(earnings_dates) 
     
@@ -1176,6 +1169,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
