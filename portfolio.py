@@ -10,7 +10,7 @@ import pytz
 st.set_page_config(layout="wide", page_title="Portfolio Dashboard")
 
 MANUAL_PRICES = {
-    'PMGOLD.AX': 72.84  # <--- Change this number manually whenever you want an updated view
+    'PMGOLD': 72.84  # <--- Change this number manually whenever you want an updated view
 }
 
 # ==========================================
@@ -1176,6 +1176,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
