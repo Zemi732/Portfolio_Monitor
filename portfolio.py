@@ -398,7 +398,7 @@ with st.sidebar:
 
     # --- Put this between FX and Futures in your sidebar ---
 
-st.sidebar.markdown("### Macro Indicators")
+    st.sidebar.markdown("### Macro Indicators")
 macro_data = fetch_macro_indicators()
 
 if macro_data:
@@ -1163,6 +1163,7 @@ else:
 # --- FINAL CATCH-ALL FOR EMPTY PORTFOLIO DATA ---
 if df.empty:
     st.info("Waiting for data...")
+
 
 
 
