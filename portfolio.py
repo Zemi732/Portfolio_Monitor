@@ -436,42 +436,42 @@ if st.button("🔄 Refresh Prices"):
 st.sidebar.markdown("### Metals & Mining")
 mining_data = fetch_mining_indicators()
 
-    if mining_data:
-        # Gold
-        gold = mining_data.get("Gold (Comex)")
-        st.sidebar.metric(
-            label="Gold Futures (GC)", 
-            value=f"${gold['current']:,.2f}", 
-            delta=f"{gold['change_pct']:.2f}%"
-        )
+if mining_data:
+    # Gold
+    gold = mining_data.get("Gold (Comex)")
+    st.sidebar.metric(
+        label="Gold Futures (GC)", 
+        value=f"${gold['current']:,.2f}", 
+        delta=f"{gold['change_pct']:.2f}%"
+    )
 
-        # Copper
-        copper = mining_data.get("Copper (Comex)")
-        st.sidebar.metric(
-            label="Copper Futures (HG)", 
-            value=f"${copper['current']:.2f}", 
-            delta=f"{copper['change_pct']:.2f}%"
-        )
+    # Copper
+    copper = mining_data.get("Copper (Comex)")
+    st.sidebar.metric(
+        label="Copper Futures (HG)", 
+        value=f"${copper['current']:.2f}", 
+        delta=f"{copper['change_pct']:.2f}%"
+    )
 
-        # Uranium (URA)
-        uranium = mining_data.get("Uranium ETF (URA)")
-        st.sidebar.metric(
-            label="Uranium Proxy (URA)", 
-            value=f"${uranium['current']:.2f}", 
-            delta=f"{uranium['change_pct']:.2f}%"
-        )
+    # Uranium (URA)
+    uranium = mining_data.get("Uranium ETF (URA)")
+    st.sidebar.metric(
+        label="Uranium Proxy (URA)", 
+        value=f"${uranium['current']:.2f}", 
+        delta=f"{uranium['change_pct']:.2f}%"
+    )
         
-        # Gold-to-Oil Ratio
-        if macro_data:
-            oil = macro_data.get("Crude Oil (WTI)")
-            if oil and oil['current'] > 0 and gold and gold['current'] > 0:
-                # Calculate how many barrels of oil 1 oz of gold buys
-                gold_oil_ratio = gold['current'] / oil['current']
-                st.sidebar.metric(
-                    label="Gold-to-Oil Ratio", 
-                    value=f"{gold_oil_ratio:.1f}", 
-                    help="How many barrels of crude oil one ounce of gold can buy."
-                )
+    # Gold-to-Oil Ratio
+    if macro_data:
+        oil = macro_data.get("Crude Oil (WTI)")
+        if oil and oil['current'] > 0 and gold and gold['current'] > 0:
+            # Calculate how many barrels of oil 1 oz of gold buys
+            gold_oil_ratio = gold['current'] / oil['current']
+            st.sidebar.metric(
+                label="Gold-to-Oil Ratio", 
+                value=f"{gold_oil_ratio:.1f}", 
+                help="How many barrels of crude oil one ounce of gold can buy."
+            )
 
 st.sidebar.markdown("---") # Optional divider
 # ==========================================
