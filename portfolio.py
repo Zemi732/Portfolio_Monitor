@@ -67,11 +67,7 @@ def fetch_market_data(ticker_list):
         usd_aud_rate = 1.0 
         
     for t in ticker_list:
-        if t in MANUAL_PRICES:
-            prices[t] = float(MANUAL_PRICES[t])
-            fx_multipliers[t] = 1.0 
-            continue 
-            
+                   
         if t in TICKER_MAP:
             yf_ticker = TICKER_MAP[t]
         elif 'US_TICKERS' in globals() and t in US_TICKERS:
@@ -706,11 +702,7 @@ if not df.empty:
     # 1. Fetch live prices & FX rates natively (NO SPINNERS)
     ticker_list = df['Ticker'].tolist()
     current_prices, fx_multipliers = fetch_market_data(ticker_list)
-    
-    for ticker, manual_price in MANUAL_PRICES.items():
-        # Check if the ticker from our manual list is in the downloaded prices
-        current_prices[ticker] = manual_price
-            
+                    
     earnings_dates = fetch_earnings_dates(ticker_list)
 
     api_missing_tickers = [t for t, p in current_prices.items() if p <= 0]
