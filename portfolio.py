@@ -9,9 +9,7 @@ import pytz
 
 st.set_page_config(layout="wide", page_title="Portfolio Dashboard")
 
-MANUAL_PRICES = {
-    'PMGOLD': 72.84  # <--- Change this number manually whenever you want an updated view
-}
+
 
 # ==========================================
 # 0. CONFIGURATION: FEES (MER)
