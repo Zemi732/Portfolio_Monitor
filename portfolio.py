@@ -223,8 +223,8 @@ def get_asx_losers_v2():
 
 @st.cache_data(show_spinner=False, ttl=900)
 def fetch_mining_indicators():
-    # HG=F is Copper Futures, URA is the Global X Uranium ETF proxy
-    tickers = {"Copper (Comex)": "HG=F", "Uranium ETF (URA)": "URA"}
+    # Added Gold (GC=F) to the dictionary
+    tickers = {"Copper (Comex)": "HG=F", "Uranium ETF (URA)": "URA", "Gold (Comex)": "GC=F"}
     data = {}
     
     for name, ticker in tickers.items():
