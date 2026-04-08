@@ -537,19 +537,6 @@ TICKER_MAP = {
     "XUSE": "XUSE.SW", "PMGOLD": "PMGOLD.AX", "IWDA": "IWDA.L" 
 }
 
-from decimal import Decimal, InvalidOperation # Add InvalidOperation to your imports
-
-def safe_decimal(value):
-    """Helper function to turn messy strings into Decimals safely."""
-    if pd.isna(value) or str(value).strip() == "":
-        return Decimal('0')
-    try:
-        # Remove common non-numeric characters like commas and dollar signs
-        clean_value = str(value).replace('$', '').replace(',', '').strip()
-        return Decimal(clean_value)
-    except (InvalidOperation, ValueError):
-        return Decimal('0')
-
 def load_data():
     total_brokerage_paid = Decimal('0')
     total_realized_pl_lifetime = Decimal('0')
