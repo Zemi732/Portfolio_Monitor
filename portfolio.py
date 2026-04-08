@@ -6,6 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 import datetime
 from datetime import timedelta
 import pytz
+import time
 
 st.set_page_config(layout="wide", page_title="Portfolio Dashboard")
 
@@ -542,7 +543,13 @@ def load_data():
     total_realized_pl_lifetime = Decimal('0')
     
     try:
-        sheet_url = "https://docs.google.com/spreadsheets/d/1yzFLgUMXo0iutBoEEEEstJl5EcXHHpKu6EG082fEWGI/export?format=csv"
+        # Base URL without the export format
+        base_url = "https://docs.google.com/spreadsheets/d/1yzFLgUMXo0iutBoEEEEstJl5EcXHHpKu6EG082fEWGI/export?format=csv"
+        
+        # Add a unique timestamp parameter to bypass ALL caches
+        # Google ignores the '&t=' parameter, but it forces a fresh download
+        sheet_url = f"{base_url}&t={int(time.time())}"
+        
         df_trades = pd.read_csv(sheet_url)
         df_trades.columns = df_trades.columns.str.strip()
         df_trades['Trade Date'] = pd.to_datetime(df_trades['Trade Date'], dayfirst=True, format='mixed')
