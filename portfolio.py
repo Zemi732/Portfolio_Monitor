@@ -554,6 +554,10 @@ def load_data():
         df_trades.columns = df_trades.columns.str.strip()
         df_trades['Trade Date'] = pd.to_datetime(df_trades['Trade Date'], dayfirst=True, format='mixed')
         df_trades = df_trades.sort_values('Trade Date', ascending=True)
+        
+        # TEMPORARY DIAGNOSTIC LINE:
+        st.write("RAW DATA PRE-CALCULATION:", df_trades.tail(15))
+        
         holdings_dict = {}
         
         for ticker, group in df_trades.groupby('Instrument Code'):
