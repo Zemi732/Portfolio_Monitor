@@ -537,7 +537,11 @@ TICKER_MAP = {
     "XUSE": "XUSE.SW", "PMGOLD": "PMGOLD.AX", "IWDA": "IWDA.L" 
 }
 
-if pd.isna(value) or str(value).strip() == "":
+from decimal import Decimal, InvalidOperation # Add InvalidOperation to your imports
+
+def safe_decimal(value):
+    """Helper function to turn messy strings into Decimals safely."""
+    if pd.isna(value) or str(value).strip() == "":
         return Decimal('0')
     try:
         # Remove common non-numeric characters like commas and dollar signs
