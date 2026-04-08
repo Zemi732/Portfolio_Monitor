@@ -537,24 +537,35 @@ TICKER_MAP = {
     "XUSE": "XUSE.SW", "PMGOLD": "PMGOLD.AX", "IWDA": "IWDA.L" 
 }
 
-# --- A. LOAD HOLDINGS & CALCULATE METRICS ---
+if pd.isna(value) or str(value).strip() == "":
+        return Decimal('0')
+    try:
+        # Remove common non-numeric characters like commas and dollar signs
+        clean_value = str(value).replace('$', '').replace(',', '').strip()
+        return Decimal(clean_value)
+    except (InvalidOperation, ValueError):
+        return Decimal('0')
+
 def load_data():
     total_brokerage_paid = Decimal('0')
     total_realized_pl_lifetime = Decimal('0')
     
     try:
-        # Base URL without the export format
+        # 1. Added the cache-buster timestamp to the URL
         base_url = "https://docs.google.com/spreadsheets/d/1yzFLgUMXo0iutBoEEEEstJl5EcXHHpKu6EG082fEWGI/export?format=csv"
-        
-        # Add a unique timestamp parameter to bypass ALL caches
-        # Google ignores the '&t=' parameter, but it forces a fresh download
         sheet_url = f"{base_url}&t={int(time.time())}"
         
         df_trades = pd.read_csv(sheet_url)
+        
+        # 2. DROP EMPTY ROWS: This prevents the script from trying to read blank lines at the bottom
+        df_trades = df_trades.dropna(subset=['Instrument Code', 'Quantity'])
+        
         df_trades.columns = df_trades.columns.str.strip()
+        
+        # 3. FIX DATE PARSING: Forces DD/MM/YYYY logic
         df_trades['Trade Date'] = pd.to_datetime(df_trades['Trade Date'], dayfirst=True, errors='coerce')
         df_trades = df_trades.sort_values('Trade Date', ascending=True)
-        
+
         holdings_dict = {}
         
         for ticker, group in df_trades.groupby('Instrument Code'):
@@ -564,19 +575,14 @@ def load_data():
             
             for index, row in group.iterrows():
                 trans_type = str(row['Transaction Type']).lower()
-                qty = Decimal(str(row['Quantity']))
-                price = Decimal(str(row['Price']))
                 
-                trade_brokerage = Decimal('0')
-                if 'Brokerage' in row and pd.notnull(row['Brokerage']): raw_b = str(row['Brokerage'])
-                elif 'Commission' in row and pd.notnull(row['Commission']): raw_b = str(row['Commission'])
-                elif 'Fee' in row and pd.notnull(row['Fee']): raw_b = str(row['Fee'])
-                else: raw_b = ''
+                # 4. USE THE SAFE CONVERTER: This stops the ConversionSyntax error
+                qty = safe_decimal(row['Quantity'])
+                price = safe_decimal(row['Price'])
                 
-                try: 
-                    clean_b = raw_b.replace('$','').replace(',','').replace('-','')
-                    if clean_b.strip(): trade_brokerage = Decimal(clean_b)
-                except: trade_brokerage = Decimal('0')
+                # Handling brokerage/commission/fees consistently
+                raw_b = row.get('Brokerage') or row.get('Commission') or row.get('Fee') or '0'
+                trade_brokerage = safe_decimal(raw_b)
                 
                 total_brokerage_paid += trade_brokerage
 
@@ -596,8 +602,7 @@ def load_data():
                         total_shares_calc -= qty
 
             if total_shares_calc > 0:
-                avg_price_dec = total_cost / total_shares_calc
-                avg_price = float(avg_price_dec)
+                avg_price = float(total_cost / total_shares_calc)
                 total_shares = float(total_shares_calc)
                 
                 if ticker in CORE_TICKERS: cat = "Core"
@@ -609,8 +614,11 @@ def load_data():
                     'Avg_Price': avg_price, 'Realized_PL_Active': float(ticker_realized_pl)
                 }
 
-        if not holdings_dict: return pd.DataFrame(), 0.0, 0.0
+        if not holdings_dict: 
+            return pd.DataFrame(), 0.0, 0.0
+            
         return pd.DataFrame.from_dict(holdings_dict, orient='index'), float(total_brokerage_paid), float(total_realized_pl_lifetime)
+
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return pd.DataFrame(), 0.0, 0.0
