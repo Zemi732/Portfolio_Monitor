@@ -568,12 +568,12 @@ def load_data():
                 trans_type = str(row['Transaction Type']).lower()
                 
                 # 4. USE THE SAFE CONVERTER: This stops the ConversionSyntax error
-                qty = safe_decimal(row['Quantity'])
-                price = safe_decimal(row['Price'])
+                qty = Decimal(row['Quantity'])
+                price = Decimal(row['Price'])
                 
                 # Handling brokerage/commission/fees consistently
                 raw_b = row.get('Brokerage') or row.get('Commission') or row.get('Fee') or '0'
-                trade_brokerage = safe_decimal(raw_b)
+                trade_brokerage = Decimal(raw_b)
                 
                 total_brokerage_paid += trade_brokerage
 
