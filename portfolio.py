@@ -542,19 +542,18 @@ def load_data():
     total_realized_pl_lifetime = Decimal('0')
     
     try:
-        # 1. Added the cache-buster timestamp to the URL
+        # 1. Fresh data fetch with cache-buster
         base_url = "https://docs.google.com/spreadsheets/d/1yzFLgUMXo0iutBoEEEEstJl5EcXHHpKu6EG082fEWGI/export?format=csv"
         sheet_url = f"{base_url}&t={int(time.time())}"
         
         df_trades = pd.read_csv(sheet_url)
         
-        # 2. DROP EMPTY ROWS: This prevents the script from trying to read blank lines at the bottom
+        # 2. Cleanup: Strip column spaces and drop completely empty rows
+        df_trades.columns = df_trades.columns.str.strip()
         df_trades = df_trades.dropna(subset=['Instrument Code', 'Quantity'])
         
-        df_trades.columns = df_trades.columns.str.strip()
-        
-        # 3. FIX DATE PARSING: Forces DD/MM/YYYY logic
-        df_trades['Trade Date'] = pd.to_datetime(df_trades['Trade Date'], dayfirst=True, errors='coerce')
+        # 3. Date Parsing: Standard format works best for YYYY-MM-DD
+        df_trades['Trade Date'] = pd.to_datetime(df_trades['Trade Date'], errors='coerce')
         df_trades = df_trades.sort_values('Trade Date', ascending=True)
 
         holdings_dict = {}
@@ -567,13 +566,18 @@ def load_data():
             for index, row in group.iterrows():
                 trans_type = str(row['Transaction Type']).lower()
                 
-                # 4. USE THE SAFE CONVERTER: This stops the ConversionSyntax error
-                qty = Decimal(row['Quantity'])
-                price = Decimal(row['Price'])
+                # 4. Inline Numeric Cleaning: 
+                # This prevents the ConversionSyntax error by removing symbols and checking for 'nan'
+                q_raw = str(row['Quantity']).replace(',', '').replace('$', '').strip()
+                qty = Decimal(q_raw) if q_raw and q_raw != 'nan' else Decimal('0')
                 
-                # Handling brokerage/commission/fees consistently
+                p_raw = str(row['Price']).replace(',', '').replace('$', '').strip()
+                price = Decimal(p_raw) if p_raw and p_raw != 'nan' else Decimal('0')
+                
+                # Check for brokerage across different possible column names
                 raw_b = row.get('Brokerage') or row.get('Commission') or row.get('Fee') or '0'
-                trade_brokerage = Decimal(raw_b)
+                b_raw = str(raw_b).replace(',', '').replace('$', '').strip()
+                trade_brokerage = Decimal(b_raw) if b_raw and b_raw != 'nan' else Decimal('0')
                 
                 total_brokerage_paid += trade_brokerage
 
@@ -592,6 +596,7 @@ def load_data():
                         total_cost -= cost_basis_sold
                         total_shares_calc -= qty
 
+            # Final check: if shares are zero, the ticker won't be added to holdings_dict
             if total_shares_calc > 0:
                 avg_price = float(total_cost / total_shares_calc)
                 total_shares = float(total_shares_calc)
