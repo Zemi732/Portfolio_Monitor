@@ -557,9 +557,6 @@ def load_data():
             st.warning("Some dates couldn't be parsed! Check your Google Sheet format.")
         df_trades = df_trades.sort_values('Trade Date', ascending=True)
         
-        # TEMPORARY DIAGNOSTIC LINE:
-        st.write("RAW DATA PRE-CALCULATION:", df_trades.tail(15))
-        
         holdings_dict = {}
         
         for ticker, group in df_trades.groupby('Instrument Code'):
