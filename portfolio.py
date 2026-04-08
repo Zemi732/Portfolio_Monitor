@@ -553,8 +553,6 @@ def load_data():
         df_trades = pd.read_csv(sheet_url)
         df_trades.columns = df_trades.columns.str.strip()
         df_trades['Trade Date'] = pd.to_datetime(df_trades['Trade Date'], dayfirst=True, errors='coerce')
-        if df_trades['Trade Date'].isnull().any():
-            st.warning("Some dates couldn't be parsed! Check your Google Sheet format.")
         df_trades = df_trades.sort_values('Trade Date', ascending=True)
         
         holdings_dict = {}
