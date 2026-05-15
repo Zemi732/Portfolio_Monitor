@@ -539,7 +539,8 @@ TICKER_MAP = {
 
 def load_data():
     total_brokerage_paid = Decimal('0')
-    total_realized_pl_lifetime = Decimal('0')
+    total_realized_aud = Decimal('0') # Separated AUD bucket
+    total_realized_usd = Decimal('0') # Separated USD bucket
     
     try:
         # 1. Fresh data fetch with cache-buster
@@ -562,6 +563,10 @@ def load_data():
             total_shares_calc = Decimal('0')
             total_cost = Decimal('0')
             ticker_realized_pl = Decimal('0')
+            
+            # Determine if this specific ticker is AUD or USD based on your maps
+            yf_ticker = TICKER_MAP.get(ticker, ticker if ticker in US_TICKERS else f"{ticker}.AX")
+            is_aud = yf_ticker.endswith('.AX')
             
             for index, row in group.iterrows():
                 trans_type = str(row['Transaction Type']).lower()
@@ -592,7 +597,13 @@ def load_data():
                         proceeds = (qty * price) - trade_brokerage
                         trade_pl = proceeds - cost_basis_sold
                         ticker_realized_pl += trade_pl
-                        total_realized_pl_lifetime += trade_pl
+                        
+                        # Route the profit to the correct currency bucket
+                        if is_aud:
+                            total_realized_aud += trade_pl
+                        else:
+                            total_realized_usd += trade_pl
+                            
                         total_cost -= cost_basis_sold
                         total_shares_calc -= qty
 
@@ -611,13 +622,14 @@ def load_data():
                 }
 
         if not holdings_dict: 
-            return pd.DataFrame(), 0.0, 0.0
+            return pd.DataFrame(), 0.0, 0.0, 0.0
             
-        return pd.DataFrame.from_dict(holdings_dict, orient='index'), float(total_brokerage_paid), float(total_realized_pl_lifetime)
+        # Return both AUD and USD totals
+        return pd.DataFrame.from_dict(holdings_dict, orient='index'), float(total_brokerage_paid), float(total_realized_aud), float(total_realized_usd)
 
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        return pd.DataFrame(), 0.0, 0.0
+        return pd.DataFrame(), 0.0, 0.0, 0.0
 
 # --- C. STYLING ---
 def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price'):
@@ -708,7 +720,7 @@ def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price')
     return dataframe.style.format(format_dict).apply(custom_styler, axis=1)
 
 # --- D. MAIN EXECUTION ---
-df, total_brokerage_val, total_lifetime_realized = load_data()
+df, total_brokerage_val, realized_aud, realized_usd = load_data()
 
 if not df.empty:
     # 1. Fetch live prices & FX rates natively (NO SPINNERS)
@@ -736,7 +748,6 @@ if not df.empty:
     
     df['Market_Value_AUD'] = df['Shares'] * df['Current_Price'] * df['FX Rate']
     df['Gain_Loss_Native'] = (df['Current_Price'] - df['Avg_Price']) * df['Shares'] * df['FX Rate']
-    df['Realized_PL_Active'] = df['Realized_PL_Active'] * df['FX Rate']
     
     total_value_aud = df['Market_Value_AUD'].sum() 
     
@@ -912,7 +923,8 @@ if not df.empty:
 
         st.divider()
         st.metric("💸 Total Brokerage Paid", f"${total_brokerage_val:,.2f}")
-        st.metric("💰 Total Realized P/L", f"${total_lifetime_realized:,.2f}", help="Lifetime realized profit/loss from all sold positions.")
+        st.metric("🇦🇺 Realized P/L (AUD)", f"${realized_aud:,.2f}")
+        st.metric("🇺🇸 Realized P/L (USD)", f"${realized_usd:,.2f}", help="Lifetime realized profit/loss kept in native USD.")
         st.caption("Includes fully sold positions.")
 
 # ---> NEW SECTION: CORE PORTFOLIO 1-YEAR PERFORMANCE <---
