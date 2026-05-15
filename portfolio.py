@@ -564,15 +564,15 @@ def load_data():
             total_cost = Decimal('0')
             ticker_realized_pl = Decimal('0')
             
-            # Determine if this specific ticker is AUD or USD based on your maps
-            yf_ticker = TICKER_MAP.get(ticker, ticker if ticker in US_TICKERS else f"{ticker}.AX")
-            is_aud = yf_ticker.endswith('.AX')
-            
             for index, row in group.iterrows():
                 trans_type = str(row['Transaction Type']).lower()
                 
-                # 4. Inline Numeric Cleaning: 
-                # This prevents the ConversionSyntax error by removing symbols and checking for 'nan'
+                # ---> THE MAGIC FIX <---
+                # Look directly at the spreadsheet's currency column.
+                # (Change 'Currency' if your column header is spelled differently!)
+                trade_currency = str(row.get('Currency', 'AUD')).strip().upper()
+                
+                # 4. Inline Numeric Cleaning
                 q_raw = str(row['Quantity']).replace(',', '').replace('$', '').strip()
                 qty = Decimal(q_raw) if q_raw and q_raw != 'nan' else Decimal('0')
                 
@@ -598,11 +598,11 @@ def load_data():
                         trade_pl = proceeds - cost_basis_sold
                         ticker_realized_pl += trade_pl
                         
-                        # Route the profit to the correct currency bucket
-                        if is_aud:
-                            total_realized_aud += trade_pl
-                        else:
+                        # Route the profit based on the ACTUAL spreadsheet column
+                        if trade_currency == 'USD':
                             total_realized_usd += trade_pl
+                        else:
+                            total_realized_aud += trade_pl
                             
                         total_cost -= cost_basis_sold
                         total_shares_calc -= qty
@@ -630,7 +630,7 @@ def load_data():
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return pd.DataFrame(), 0.0, 0.0, 0.0
-
+        
 # --- C. STYLING ---
 def apply_portfolio_styling(dataframe, price_col_name, avg_col_name='Avg_Price'):
     format_dict = {
