@@ -488,7 +488,7 @@ with c_ny:
 
 CORE_ORDER = ['VUAA', 'XUSE', 'EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML']
 CORE_TICKERS = ['VUAA', 'XUSE', 'EXCH', 'BGBL', 'VAS', 'EMXC', 'QSML', 'IWDA']
-US_TICKERS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'TSLA', 'PLTR'] 
+US_TICKERS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'TSLA', 'PLTR', 'GOOG', 'MU'] 
 
 GEO_MAP = {
     'VAS': {'Australia': 1.0}, 'BHP': {'Australia': 1.0}, 'CBA': {'Australia': 1.0}, 
